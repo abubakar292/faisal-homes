@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Eye, Printer, XCircle, Search, X } from 'lucide-react';
+import { BookOpen, Eye, Printer, XCircle, Search, X, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import DataTable, { Column } from '../../components/ui/DataTable';
@@ -96,24 +96,36 @@ const BookingList: React.FC = () => {
     { key: 'status', label: 'Status', render: r => <StatusBadge status={r.status as string} /> },
     {
       key: 'actions', label: 'Actions', sortable: false,
-      render: r => (
-        <div className="flex items-center gap-1">
-          <button onClick={() => handlePrint(r as unknown as Booking)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500" title="Print Receipt"><Printer size={15} /></button>
-          {((r.status as string) === 'confirmed' || (r.status as string) === 'pending') && (
-            <button onClick={() => setCancelId(r.id as string)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500" title="Cancel Booking"><XCircle size={15} /></button>
-          )}
-        </div>
-      )
+      render: r => {
+        const isConfirmed = (r.status as string) === 'confirmed';
+        return (
+          <div className="flex items-center gap-1">
+            {isConfirmed && (
+              <button
+                onClick={() => navigate(`/sales/new?bookingId=${r.id}`)}
+                className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600"
+                title="Complete Sale"
+              >
+                <UserCheck size={15} />
+              </button>
+            )}
+            <button onClick={() => handlePrint(r as unknown as Booking)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500" title="Print Receipt"><Printer size={15} /></button>
+            {((r.status as string) === 'confirmed' || (r.status as string) === 'pending') && (
+              <button onClick={() => setCancelId(r.id as string)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500" title="Cancel Booking"><XCircle size={15} /></button>
+            )}
+          </div>
+        );
+      }
     }
   ];
 
   return (
     <div>
       <PageHeader title="Booking List" subtitle={`${bookings.length} bookings`} icon={<BookOpen size={20} />}
-        actions={<button onClick={() => navigate('/bookings/new')} className="btn-primary">+ New Booking</button>} />
+        actions={<button onClick={() => navigate('/sales/new?mode=booking')} className="btn-primary">+ New Sale</button>} />
       <div className="card">
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="relative flex-1">
+        <div className="flex flex-col sm:flex-row gap-3 mb-4 items-stretch sm:items-center justify-between">
+          <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
@@ -128,17 +140,21 @@ const BookingList: React.FC = () => {
               </button>
             )}
           </div>
-          <select
-            className="input-field sm:w-44"
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-          >
-            <option value="">All Statuses</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="converted">Converted</option>
-            <option value="pending">Pending</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+          <div className="flex flex-wrap gap-1 items-center">
+            {(['', 'confirmed', 'converted', 'pending', 'cancelled'] as const).map(st => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition-colors ${
+                  statusFilter === st
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {st ? st : 'All'}
+              </button>
+            ))}
+          </div>
         </div>
         <DataTable
           columns={columns}

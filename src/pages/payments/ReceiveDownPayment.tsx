@@ -16,7 +16,9 @@ import {
 import { printInNewWindow, generateDownPaymentReceiptHTML } from '../../utils/printUtils';
 import type { Sale, Customer, Plot, DownPaymentTransaction, CompanySettings } from '../../types';
 
-const ReceiveDownPayment: React.FC = () => {
+interface Props { embedded?: boolean; }
+
+const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const prefilledSaleId = searchParams.get('saleId') || '';
@@ -209,11 +211,13 @@ const ReceiveDownPayment: React.FC = () => {
 
   return (
     <div>
-      <PageHeader
-        title="Receive Down Payment"
-        subtitle="Record remaining down payment from customer"
-        icon={<CreditCard size={20} />}
-      />
+      {!embedded && (
+        <PageHeader
+          title="Receive Down Payment"
+          subtitle="Record remaining down payment from customer"
+          icon={<CreditCard size={20} />}
+        />
+      )}
 
       <div className="card max-w-2xl">
         <form onSubmit={handleSave} className="space-y-4">

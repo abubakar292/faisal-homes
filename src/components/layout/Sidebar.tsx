@@ -1,20 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import Logo from '../Logo';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Home, PlusCircle, List, Grid, Map,
-  Users, UserPlus, BookOpen, ClipboardList, FilePlus, FileText,
-  CreditCard, Receipt, History, Handshake, DollarSign, TrendingUp,
-  BarChart2, Calendar, FileBarChart, AlertCircle, Settings,
-  ChevronDown, UserCheck, Database, Building2, BookMarked,
+  Users, BookOpen, ClipboardList, CreditCard, Receipt,
+  History, Handshake, DollarSign, BarChart2, Calendar,
+  AlertCircle, Settings, ChevronDown, Database, Building2,
+  FileText, Plus
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-interface NavChild { label: string; path: string; icon: React.ReactNode; adminOnly?: boolean; }
-interface NavGroup  {
-  label: string; icon: React.ReactNode;
-  children?: NavChild[]; path?: string; adminOnly?: boolean;
+interface NavChild {
+  label: string;
+  path: string;
+  icon: React.ReactNode;
+  adminOnly?: boolean;
+}
+
+interface NavSubGroup {
+  subheading?: string;
+  items: NavChild[];
+}
+
+interface NavGroup {
+  label: string;
+  icon: React.ReactNode;
+  children?: NavChild[];
+  subgroups?: NavSubGroup[];
+  path?: string;
+  adminOnly?: boolean;
 }
 
 const nav: NavGroup[] = [
@@ -31,53 +46,60 @@ const nav: NavGroup[] = [
   {
     label: 'Customers', icon: <Users size={16} />,
     children: [
-      { label: 'Add Customer',   path: '/customers/add',  icon: <UserPlus size={14} /> },
       { label: 'Customer List',  path: '/customers/list', icon: <List size={14} /> },
     ],
   },
   {
     label: 'Bookings & Sales', icon: <BookOpen size={16} />,
     children: [
-      { label: 'New Booking',    path: '/bookings/new',   icon: <FilePlus size={14} /> },
       { label: 'Booking List',   path: '/bookings/list',  icon: <ClipboardList size={14} /> },
-      { label: 'Assign Plot',    path: '/sales/new',      icon: <UserCheck size={14} /> },
-      { label: 'Assigned Plots', path: '/sales/list',     icon: <List size={14} /> },
-      { label: 'Plot Agreement', path: '/sales/agreement',icon: <FileText size={14} /> },
+      { label: 'Sales List',     path: '/sales/list',     icon: <List size={14} /> },
     ],
   },
   {
     label: 'Payments', icon: <CreditCard size={16} />,
     children: [
-      { label: 'Create Plan',    path: '/payment-plans/new',        icon: <PlusCircle size={14} /> },
-      { label: 'Payment Plans',  path: '/payment-plans/list',       icon: <List size={14} /> },
       { label: 'Receive Payment',path: '/payments/receive',         icon: <Receipt size={14} /> },
       { label: 'Down Payments',  path: '/payments/down-payments',   icon: <DollarSign size={14} /> },
-      { label: 'On-Possession',  path: '/payments/possession',      icon: <BookMarked size={14} /> },
       { label: 'Payment History',path: '/payments/history',         icon: <History size={14} /> },
     ],
   },
   {
     label: 'Dealers', icon: <Handshake size={16} />,
     children: [
-      { label: 'Add Dealer',       path: '/dealers/add',        icon: <PlusCircle size={14} /> },
       { label: 'Dealer List',      path: '/dealers/list',       icon: <List size={14} /> },
       { label: 'Commission',       path: '/dealers/commission', icon: <DollarSign size={14} /> },
-      { label: 'Comm. Report',     path: '/dealers/report',     icon: <FileBarChart size={14} /> },
     ],
   },
-
   {
     label: 'Reports', icon: <BarChart2 size={16} />,
     children: [
-      { label: 'Daily Report',      path: '/reports/daily',              icon: <Calendar size={14} /> },
-      { label: 'Sale Report',       path: '/reports/sales',              icon: <BarChart2 size={14} /> },
-      { label: 'Booking Report',    path: '/reports/bookings',           icon: <BookOpen size={14} /> },
-      { label: 'Installment',       path: '/reports/installments',       icon: <Receipt size={14} /> },
-      { label: 'Collection',        path: '/reports/collection',         icon: <DollarSign size={14} /> },
-      { label: 'Pending Payments',  path: '/reports/pending',            icon: <AlertCircle size={14} /> },
-      { label: 'Shortage List',     path: '/reports/shortage-list',      icon: <AlertCircle size={14} /> },
-      { label: 'Dealer Commission', path: '/reports/dealer-commission',  icon: <Handshake size={14} /> },
-      { label: 'Plot Status',       path: '/reports/plot-status',        icon: <Home size={14} /> },
+      { label: 'Overview', path: '/reports/daily', icon: <Calendar size={14} /> },
+    ],
+    subgroups: [
+      {
+        subheading: 'SALES & BOOKINGS',
+        items: [
+          { label: 'Sale Report',      path: '/reports/sales',              icon: <BarChart2 size={14} /> },
+          { label: 'Booking Report',   path: '/reports/bookings',           icon: <BookOpen size={14} /> },
+        ],
+      },
+      {
+        subheading: 'COLLECTIONS',
+        items: [
+          { label: 'Collection',       path: '/reports/collection',         icon: <DollarSign size={14} /> },
+          { label: 'Installment',      path: '/reports/installments',       icon: <Receipt size={14} /> },
+          { label: 'Pending Payments', path: '/reports/pending',            icon: <AlertCircle size={14} /> },
+          { label: 'Shortage List',    path: '/reports/shortage-list',      icon: <AlertCircle size={14} /> },
+        ],
+      },
+      {
+        subheading: 'COMMISSIONS & ASSETS',
+        items: [
+          { label: 'Dealer Commission',path: '/reports/dealer-commission',  icon: <Handshake size={14} /> },
+          { label: 'Plot Status',      path: '/reports/plot-status',        icon: <Home size={14} /> },
+        ],
+      },
     ],
   },
   {
@@ -97,33 +119,68 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
   const location = useLocation();
   const { isAdmin } = useAuth();
 
-  const initialOpen = nav
-    .filter(g => g.children?.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/')))
-    .map(g => g.label)[0] || null;
+  const getActiveGroup = (pathname: string): string | null => {
+    for (const g of nav) {
+      if (g.children?.some(c => pathname === c.path || pathname.startsWith(c.path + '/'))) {
+        return g.label;
+      }
+      if (g.subgroups?.some(sg => sg.items.some(c => pathname === c.path || pathname.startsWith(c.path + '/')))) {
+        return g.label;
+      }
+    }
+    return null;
+  };
 
-  const [open, setOpen] = useState<string | null>(initialOpen);
+  const [open, setOpen] = useState<string | null>(() => {
+    const active = getActiveGroup(location.pathname);
+    if (active) return active;
+    try {
+      return localStorage.getItem('fh_sidebar_open');
+    } catch {
+      return null;
+    }
+  });
 
-  React.useEffect(() => {
-    const currentGroup = nav
-      .filter(g => g.children?.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/')))
-      .map(g => g.label)[0] || null;
+  useEffect(() => {
+    const currentGroup = getActiveGroup(location.pathname);
     if (currentGroup) {
       setOpen(currentGroup);
+      try {
+        localStorage.setItem('fh_sidebar_open', currentGroup);
+      } catch {}
     }
   }, [location.pathname]);
 
-  const toggle = (label: string) =>
-    setOpen(p => p === label ? null : label);
+  const toggle = (label: string) => {
+    setOpen(prev => {
+      const next = prev === label ? null : label;
+      try {
+        if (next) {
+          localStorage.setItem('fh_sidebar_open', next);
+        } else {
+          localStorage.removeItem('fh_sidebar_open');
+        }
+      } catch {}
+      return next;
+    });
+  };
 
-  const isGroupActive = (children: NavChild[]) =>
-    children.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/'));
+  const isGroupActive = (item: NavGroup): boolean => {
+    if (item.children?.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/'))) {
+      return true;
+    }
+    if (item.subgroups?.some(sg => sg.items.some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/')))) {
+      return true;
+    }
+    return false;
+  };
 
   return (
     <div
       className="h-full flex flex-col overflow-y-auto overflow-x-hidden"
       style={{ background: '#1a3c6e' }}
     >
-      {/* ── Logo ── */}
+      {/* ── Logo Header ── */}
       <div
         className="flex items-center gap-3 px-4 h-16 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
@@ -137,8 +194,31 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
         )}
       </div>
 
-      {/* ── Nav ── */}
-      <nav className="flex-1 py-3 px-2 space-y-0.5">
+      {/* ── "+ New Sale" Accent Button ── */}
+      <div className={collapsed ? 'px-2 pt-3 pb-2 flex justify-center' : 'px-3 pt-3 pb-2'}>
+        <NavLink
+          to="/sales/new"
+          onClick={onClose}
+          id="sidebar-new-sale-accent-btn"
+          className={
+            collapsed
+              ? 'w-10 h-10 flex items-center justify-center rounded-xl font-bold shadow-md transition-all duration-200 hover:scale-105 active:scale-95'
+              : 'w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold text-xs tracking-wide shadow-md transition-all duration-200 hover:brightness-105 active:scale-98'
+          }
+          style={{
+            background: 'linear-gradient(135deg, #e7b861 0%, #d49f3e 100%)',
+            color: '#0f2444',
+            boxShadow: '0 4px 14px rgba(231, 184, 97, 0.3)',
+          }}
+          title="New Sale"
+        >
+          <Plus size={collapsed ? 20 : 16} strokeWidth={2.5} />
+          {!collapsed && <span>+ New Sale</span>}
+        </NavLink>
+      </div>
+
+      {/* ── Navigation List ── */}
+      <nav className="flex-1 py-1 px-2 space-y-0.5">
         {nav.map(item => {
           if (item.adminOnly && !isAdmin) return null;
 
@@ -159,16 +239,16 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
             );
           }
 
-          /* Group */
+          /* Group with children / subgroups */
           const isOpen   = open === item.label;
-          const isActive = item.children ? isGroupActive(item.children) : false;
+          const isActive = isGroupActive(item);
 
           return (
             <div key={item.label}>
               <button
                 onClick={() => toggle(item.label)}
                 className={`sidebar-link w-full ${
-                  isActive ? 'text-white' : 'text-white/70 hover:text-white hover:bg-white/10'
+                  isActive ? 'text-white font-semibold' : 'text-white/70 hover:text-white hover:bg-white/10'
                 }`}
                 style={{ borderLeft: '3px solid transparent' }}
               >
@@ -185,7 +265,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
               </button>
 
               <AnimatePresence initial={false}>
-                {isOpen && !collapsed && item.children && (
+                {isOpen && !collapsed && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
@@ -194,7 +274,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
                     className="overflow-hidden"
                   >
                     <div className="ml-3 pl-3 py-1 space-y-0.5" style={{ borderLeft: '1px solid rgba(255,255,255,0.12)' }}>
-                      {item.children.map(child => {
+                      {/* Direct children */}
+                      {item.children?.map(child => {
                         if (child.adminOnly && !isAdmin) return null;
                         return (
                           <NavLink
@@ -210,6 +291,35 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
                           </NavLink>
                         );
                       })}
+
+                      {/* Subgroups with section subheadings */}
+                      {item.subgroups?.map((sg, sgIdx) => (
+                        <div key={sgIdx} className="pt-2">
+                          {sg.subheading && (
+                            <div className="px-3 pb-1 text-[9px] font-bold tracking-wider text-white/40 uppercase">
+                              {sg.subheading}
+                            </div>
+                          )}
+                          <div className="space-y-0.5">
+                            {sg.items.map(child => {
+                              if (child.adminOnly && !isAdmin) return null;
+                              return (
+                                <NavLink
+                                  key={child.path}
+                                  to={child.path}
+                                  onClick={onClose}
+                                  className={({ isActive }: { isActive: boolean }) =>
+                                    `sidebar-link text-xs py-2 ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
+                                  }
+                                >
+                                  <span className="flex-shrink-0">{child.icon}</span>
+                                  <span className="truncate">{child.label}</span>
+                                </NavLink>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </motion.div>
                 )}

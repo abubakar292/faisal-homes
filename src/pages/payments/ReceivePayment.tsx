@@ -18,9 +18,9 @@ import {
 import { printContent, generatePaymentReceipt } from '../../utils/printUtils';
 import type { Customer, Sale, Plot, Installment, CompanySettings } from '../../types';
 
-interface Props { possessionMode?: boolean; }
+interface Props { possessionMode?: boolean; embedded?: boolean; }
 
-const ReceivePayment: React.FC<Props> = ({ possessionMode = false }) => {
+const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = false }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -252,11 +252,13 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false }) => {
 
   return (
     <div>
-      <PageHeader
-        title={possessionMode ? 'On-Possession Payment' : 'Receive Payment'}
-        subtitle={possessionMode ? 'Record possession payment' : 'Record installment payment'}
-        icon={<Receipt size={20} />}
-      />
+      {!embedded && (
+        <PageHeader
+          title={possessionMode ? 'On-Possession Payment' : 'Receive Payment'}
+          subtitle={possessionMode ? 'Record possession payment' : 'Record installment payment'}
+          icon={<Receipt size={20} />}
+        />
+      )}
 
 
 

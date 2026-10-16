@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Eye, Pencil, Trash2, Users, Search, X } from 'lucide-react';
+import { Plus, Eye, Pencil, Trash2, Users, Search, X, BookOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import DataTable, { Column } from '../../components/ui/DataTable';
@@ -102,6 +102,13 @@ const CustomerList: React.FC = () => {
       sortable: false,
       render: r => (
         <div className="flex items-center gap-1 row-actions">
+          <button
+            onClick={() => navigate(`/reports/pending/customer/${r.id}`)}
+            className="btn-icon hover:bg-emerald-50 text-emerald-600"
+            title="Customer Ledger"
+          >
+            <BookOpen size={15} />
+          </button>
           <button
             onClick={() => navigate(`/customers/${r.id}`)}
             className="btn-icon hover:bg-slate-100 text-slate-500"

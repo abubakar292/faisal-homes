@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -29,17 +29,15 @@ const CustomerList   = lazy(() => import('./pages/customers/CustomerList'));
 const CustomerDetail = lazy(() => import('./pages/customers/CustomerDetail'));
 
 // Bookings
-const NewBooking  = lazy(() => import('./pages/bookings/NewBooking'));
 const BookingList = lazy(() => import('./pages/bookings/BookingList'));
 
 // Sales
 const NewSale          = lazy(() => import('./pages/sales/NewSale'));
-const AssignPlot       = lazy(() => import('./pages/sales/AssignPlot'));
-const AssignedPlotsList = lazy(() => import('./pages/sales/AssignedPlotsList'));
-const PlotAgreement    = lazy(() => import('./pages/sales/PlotAgreement'));
+const SalesList        = lazy(() => import('./pages/sales/SalesList'));
 
 // Payments
 const PaymentPlans    = lazy(() => import('./pages/payments/PaymentPlans'));
+const ReceivePaymentHub = lazy(() => import('./pages/payments/ReceivePaymentHub'));
 const ReceivePayment  = lazy(() => import('./pages/payments/ReceivePayment'));
 const PaymentHistory  = lazy(() => import('./pages/payments/PaymentHistory'));
 const DownPayments    = lazy(() => import('./pages/payments/DownPayments'));
@@ -78,6 +76,13 @@ const PageSuspense: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     {children}
   </Suspense>
 );
+
+// ─── Redirect Helpers ─────────────────────────────────────────────────────────
+const AgreementRedirect: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const saleId = searchParams.get('saleId');
+  return <Navigate to={saleId ? `/sales/list?saleId=${saleId}` : '/sales/list'} replace />;
+};
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -132,19 +137,19 @@ const AppInner: React.FC = () => {
           <Route path="customers/:id"       element={<CustomerDetail />} />
 
           {/* Bookings */}
-          <Route path="bookings/new"        element={<NewBooking />} />
+          <Route path="bookings/new"        element={<Navigate to="/sales/new?mode=booking" replace />} />
           <Route path="bookings/list"       element={<BookingList />} />
 
           {/* Sales */}
           <Route path="sales/new"           element={<NewSale />} />
-          <Route path="sales/list"          element={<AssignedPlotsList />} />
-          <Route path="sales/agreement"     element={<PlotAgreement />} />
+          <Route path="sales/list"          element={<SalesList />} />
+          <Route path="sales/agreement"     element={<AgreementRedirect />} />
 
           {/* Payments */}
           <Route path="payment-plans/new"         element={<PaymentPlans />} />
           <Route path="payment-plans/list"         element={<PaymentPlans />} />
-          <Route path="payments/receive"           element={<ReceivePayment />} />
-          <Route path="payments/possession"        element={<ReceivePayment possessionMode />} />
+          <Route path="payments/receive"           element={<ReceivePaymentHub />} />
+          <Route path="payments/possession"        element={<Navigate to="/payments/receive?type=possession" replace />} />
           <Route path="payments/history"           element={<PaymentHistory />} />
           <Route path="payments/down-payments"     element={<DownPayments />} />
           <Route path="payments/down-payment-ledger" element={<DownPaymentLedger />} />
@@ -155,7 +160,7 @@ const AppInner: React.FC = () => {
           <Route path="dealers/list"        element={<DealerList />} />
           <Route path="dealers/edit/:id"    element={<AddDealer />} />
           <Route path="dealers/commission"  element={<DealerCommission />} />
-          <Route path="dealers/report"      element={<DealerCommissionReport />} />
+          <Route path="dealers/report"      element={<Navigate to="/reports/dealer-commission" replace />} />
 
 
 
