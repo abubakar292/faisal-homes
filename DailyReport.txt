@@ -1,0 +1,135 @@
+import React, { useEffect, useState } from 'react';
+import { Calendar, Download, Printer } from 'lucide-react';
+import toast from 'react-hot-toast';
+import PageHeader from '../../components/ui/PageHeader';
+import { getCollection, getDocument } from '../../firebase/firestore';
+import { formatCurrency, formatDate, formatDateInput } from '../../utils/formatters';
+import { printContent, generateReportHTML } from '../../utils/printUtils';
+import type { Installment, Booking, Sale, Customer, Plot, CompanySettings } from '../../types';
+import { isSameDay } from 'date-fns';
+
+const DailyReport: React.FC = () => {
+  const [selectedDate, setSelectedDate] = useState(formatDateInput(new Date()));
+  const [installments, setInstallments] = useState<Installment[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [plots, setPlots] = useState<Plot[]>([]);
+  const [company, setCompany] = useState<CompanySettings | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      getCollection<Installment>('installments'),
+      getCollection<Booking>('bookings'),
+      getCollection<Sale>('sales'),
+      getCollection<Customer>('customers'),
+      getCollection<Plot>('plots'),
+      getDocument<CompanySettings>('settings', 'company'),
+    ]).then(([i, b, s, c, p, comp]) => {
+      setInstallments(i); setBookings(b); setSales(s);
+      setCustomers(c); setPlots(p);
+      if (comp) setCompany(comp);
+    });
+  }, []);
+
+  const date = new Date(selectedDate);
+  const dayPayments = installments.filter(i => i.status === 'paid' && i.paymentDate && isSameDay(new Date(i.paymentDate), date));
+  const dayBookings = bookings.filter(b => isSameDay(new Date(b.bookingDate), date));
+  const daySales = sales.filter(s => isSameDay(new Date(s.saleDate), date));
+  const totalCollection = dayPayments.reduce((s, i) => s + i.amountPaid, 0);
+
+  const customerName = (id: string) => customers.find(c => c.id === id)?.name || '—';
+  const plotInfo = (id: string) => { const p = plots.find(pl => pl.id === id); return p ? `${p.plotNumber}-${p.block}` : '—'; };
+
+  const handleExportPDF = () => {
+    if (!company) { toast.error('Configure company settings first'); return; }
+    const rows = dayPayments.map(i => [i.receiptNumber || '—', customerName(i.customerId), plotInfo(i.plotId), `#${i.installmentNumber}`, formatCurrency(i.amountPaid), i.paymentMethod || '—']);
+    const html = generateReportHTML(company, `Daily Report — ${formatDate(date)}`, ['Receipt #', 'Customer', 'Plot', 'Inst #', 'Amount', 'Method'], rows, `Total Collection: ${formatCurrency(totalCollection)}`);
+    printContent(html, 'Report');
+  };
+
+  const Section: React.FC<{ title: string; count: number; amount?: number }> = ({ title, count, amount }) => (
+    <div className="card">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-slate-700">{title}</h3>
+        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">{count}</span>
+      </div>
+      {amount !== undefined && <p className="text-xl font-bold text-green-600 mt-1">{formatCurrency(amount)}</p>}
+    </div>
+  );
+
+  return (
+    <div>
+      <PageHeader
+        title="Daily Report"
+        subtitle="All transactions for a selected date"
+        icon={<Calendar size={20} />}
+        actions={
+          <div className="flex gap-2 items-center">
+            <input type="date" className="input-field w-40" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+            <button onClick={handleExportPDF} className="btn-primary"><Download size={15} /> PDF</button>
+            <button onClick={() => window.print()} className="btn-secondary"><Printer size={15} /> Print</button>
+          </div>
+        }
+      />
+
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <Section title="Payments Received" count={dayPayments.length} amount={totalCollection} />
+        <Section title="New Bookings" count={dayBookings.length} />
+        <Section title="New Sales" count={daySales.length} />
+      </div>
+
+      {dayPayments.length > 0 && (
+        <div className="card mb-4">
+          <h3 className="font-semibold text-slate-700 mb-3">Payments Received</h3>
+          <table className="w-full">
+            <thead className="bg-slate-50"><tr>{['Receipt #', 'Customer', 'Plot', 'Inst #', 'Amount', 'Method'].map(h => <th key={h} className="table-th">{h}</th>)}</tr></thead>
+            <tbody>
+              {dayPayments.map(i => (
+                <tr key={i.id} className="table-row">
+                  <td className="table-td font-mono text-xs">{i.receiptNumber || '—'}</td>
+                  <td className="table-td font-medium">{customerName(i.customerId)}</td>
+                  <td className="table-td">{plotInfo(i.plotId)}</td>
+                  <td className="table-td">#{i.installmentNumber}</td>
+                  <td className="table-td font-semibold text-green-600">{formatCurrency(i.amountPaid)}</td>
+                  <td className="table-td">{i.paymentMethod}</td>
+                </tr>
+              ))}
+              <tr className="bg-slate-50 border-t-2 border-slate-200">
+                <td colSpan={4} className="table-td font-bold text-slate-700">Total</td>
+                <td className="table-td font-bold text-green-600">{formatCurrency(totalCollection)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {dayBookings.length > 0 && (
+        <div className="card mb-4">
+          <h3 className="font-semibold text-slate-700 mb-3">New Bookings</h3>
+          <table className="w-full">
+            <thead className="bg-slate-50"><tr>{['Receipt #', 'Customer', 'Plot', 'Booking Amount', 'Method'].map(h => <th key={h} className="table-th">{h}</th>)}</tr></thead>
+            <tbody>
+              {dayBookings.map(b => (
+                <tr key={b.id} className="table-row">
+                  <td className="table-td font-mono text-xs">{b.receiptNumber}</td>
+                  <td className="table-td font-medium">{customerName(b.customerId)}</td>
+                  <td className="table-td">{plotInfo(b.plotId)}</td>
+                  <td className="table-td font-semibold">{formatCurrency(b.bookingAmount)}</td>
+                  <td className="table-td">{b.paymentMethod}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {dayBookings.length === 0 && dayPayments.length === 0 && daySales.length === 0 && (
+        <div className="card text-center py-12 text-slate-400">No transactions on {formatDate(date)}</div>
+      )}
+    </div>
+  );
+};
+
+export default DailyReport;

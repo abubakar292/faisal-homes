@@ -1,0 +1,90 @@
+{
+  "canvas": {
+    "w": 1000,
+    "h": 875
+  },
+  "markBox": {
+    "x": 235,
+    "y": 21,
+    "w": 551,
+    "h": 435,
+    "leftPct": 23.5,
+    "topPct": 2.4,
+    "widthPct": 55.1,
+    "heightPct": 49.714,
+    "aspect": 1.267
+  },
+  "note": "Part positions are percentages of the mark box (markBox). The mark box itself is placed inside the 1000x875 logo canvas using markBox.*Pct.",
+  "parts": {
+    "base": {
+      "file": "mark-base.png",
+      "leftPct": 0.0,
+      "topPct": 21.839,
+      "widthPct": 100.0,
+      "heightPct": 78.161
+    },
+    "tower": {
+      "file": "mark-tower.png",
+      "leftPct": 58.984,
+      "topPct": 0.0,
+      "widthPct": 12.886,
+      "heightPct": 57.931
+    },
+    "bar1": {
+      "file": "mark-bar1.png",
+      "leftPct": 73.14,
+      "topPct": 4.138,
+      "widthPct": 2.359,
+      "heightPct": 57.471
+    },
+    "bar2": {
+      "file": "mark-bar2.png",
+      "leftPct": 76.225,
+      "topPct": 7.356,
+      "widthPct": 2.359,
+      "heightPct": 57.241
+    },
+    "bar3": {
+      "file": "mark-bar3.png",
+      "leftPct": 79.31,
+      "topPct": 10.575,
+      "widthPct": 2.541,
+      "heightPct": 57.471
+    },
+    "building": {
+      "file": "mark-building.png",
+      "leftPct": 84.755,
+      "topPct": 27.816,
+      "widthPct": 10.708,
+      "heightPct": 54.483
+    },
+    "win1": {
+      "file": "mark-win1.png",
+      "leftPct": 41.016,
+      "topPct": 61.609,
+      "widthPct": 5.989,
+      "heightPct": 7.356
+    },
+    "win2": {
+      "file": "mark-win2.png",
+      "leftPct": 47.731,
+      "topPct": 61.609,
+      "widthPct": 5.989,
+      "heightPct": 7.356
+    },
+    "win3": {
+      "file": "mark-win3.png",
+      "leftPct": 41.016,
+      "topPct": 69.425,
+      "widthPct": 5.989,
+      "heightPct": 7.586
+    },
+    "win4": {
+      "file": "mark-win4.png",
+      "leftPct": 47.731,
+      "topPct": 69.425,
+      "widthPct": 5.989,
+      "heightPct": 7.586
+    }
+  }
+}

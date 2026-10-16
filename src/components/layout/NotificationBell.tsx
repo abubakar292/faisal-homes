@@ -1,0 +1,245 @@
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { Bell, AlertCircle, Clock, DollarSign, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getCollection } from '../../firebase/firestore';
+import { formatCurrency, isInstallmentOverdue } from '../../utils/formatters';
+import type { Installment, Sale, Customer, Plot } from '../../types';
+
+interface Notification {
+  id: string;
+  type: 'overdue' | 'due_soon' | 'down_payment_pending';
+  title: string;
+  message: string;
+  icon: React.ReactNode;
+  color: string;
+  route: string;
+  isRead: boolean;
+}
+
+const NotificationBell: React.FC = () => {
+  const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+
+  const generateNotifications = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [installments, sales, customers, plots] = await Promise.all([
+        getCollection<Installment>('installments'),
+        getCollection<Sale>('sales'),
+        getCollection<Customer>('customers'),
+        getCollection<Plot>('plots'),
+      ]);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const in7Days = new Date(today);
+      in7Days.setDate(in7Days.getDate() + 7);
+
+      const notifs: Notification[] = [];
+      const customerMap = new Map(customers.map(c => [c.id, c]));
+      const plotMap = new Map(plots.map(p => [p.id, p]));
+
+      // 1. Overdue installments
+      const overdueInsts = installments.filter(i => {
+        if (!isInstallmentOverdue(i)) return false;
+        const sale = sales.find(s => s.id === i.saleId);
+        if (sale?.status === 'cancelled') return false;
+        return true;
+      });
+
+      // Group overdue by customer for cleaner notifications
+      const overdueByCustomer = new Map<string, { count: number; total: number; name: string }>();
+      overdueInsts.forEach(inst => {
+        const c = customerMap.get(inst.customerId);
+        const key = inst.customerId;
+        const existing = overdueByCustomer.get(key) || { count: 0, total: 0, name: c?.name || 'Unknown' };
+        existing.count++;
+        existing.total += inst.amountDue;
+        overdueByCustomer.set(key, existing);
+      });
+
+      overdueByCustomer.forEach((data, customerId) => {
+        notifs.push({
+          id: `overdue-${customerId}`,
+          type: 'overdue',
+          title: '🔴 Overdue Payments',
+          message: `${data.name} — ${data.count} installment${data.count > 1 ? 's' : ''} (Rs. ${formatCurrency(data.total)})`,
+          icon: <AlertCircle size={14} />,
+          color: '#dc2626',
+          route: '/reports/shortage-list',
+          isRead: readIds.has(`overdue-${customerId}`),
+        });
+      });
+
+      // 2. Due in 7 days
+      const dueSoon = installments.filter(i => {
+        if (i.status === 'paid' || i.type === 'down_payment') return false;
+        const sale = sales.find(s => s.id === i.saleId);
+        if (sale?.status === 'cancelled') return false;
+        const due = new Date(i.dueDate);
+        due.setHours(0, 0, 0, 0);
+        return due >= today && due <= in7Days;
+      });
+
+      if (dueSoon.length > 0) {
+        const totalDueSoon = dueSoon.reduce((s, i) => s + i.amountDue, 0);
+        notifs.push({
+          id: 'due-soon-all',
+          type: 'due_soon',
+          title: '⏰ Payments Due Soon',
+          message: `${dueSoon.length} installment${dueSoon.length > 1 ? 's' : ''} due within 7 days (Rs. ${formatCurrency(totalDueSoon)})`,
+          icon: <Clock size={14} />,
+          color: '#d97706',
+          route: '/reports/pending',
+          isRead: readIds.has('due-soon-all'),
+        });
+      }
+
+      // 3. Pending down payments
+      const activeSales = sales.filter(s => s.status !== 'cancelled');
+      const pendingDP = activeSales.filter(s => {
+        const remaining = (s.downPaymentAmount || 0) - (s.bookingAmountPaid || 0);
+        return remaining > 0;
+      });
+
+      if (pendingDP.length > 0) {
+        const totalPendingDP = pendingDP.reduce((s, sale) => s + ((sale.downPaymentAmount || 0) - (sale.bookingAmountPaid || 0)), 0);
+        notifs.push({
+          id: 'dp-pending-all',
+          type: 'down_payment_pending',
+          title: '📌 Down Payments Pending',
+          message: `${pendingDP.length} sale${pendingDP.length > 1 ? 's' : ''} with pending down payments (Rs. ${formatCurrency(totalPendingDP)})`,
+          icon: <DollarSign size={14} />,
+          color: '#0369a1',
+          route: '/payments/down-payments',
+          isRead: readIds.has('dp-pending-all'),
+        });
+      }
+
+      // Sort: overdue first, then due soon, then down payments
+      const priority: Record<string, number> = { overdue: 0, due_soon: 1, down_payment_pending: 2 };
+      notifs.sort((a, b) => priority[a.type] - priority[b.type]);
+
+      setNotifications(notifs);
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [readIds]);
+
+  useEffect(() => {
+    generateNotifications();
+    // Refresh every 5 minutes
+    const interval = setInterval(generateNotifications, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [generateNotifications]);
+
+  const unreadCount = useMemo(
+    () => notifications.filter(n => !n.isRead).length,
+    [notifications]
+  );
+
+  const markAllRead = () => {
+    const allIds = new Set(notifications.map(n => n.id));
+    setReadIds(allIds);
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
+  const handleClick = (notif: Notification) => {
+    setReadIds(prev => new Set(prev).add(notif.id));
+    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
+    navigate(notif.route);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative p-2 rounded-xl hover:bg-white/10 text-white transition-colors"
+      >
+        <Bell size={18} />
+        {unreadCount > 0 && (
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+            style={{ background: '#dc2626' }}
+          >
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </motion.span>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+
+            {/* Dropdown */}
+            <motion.div
+              initial={{ opacity: 0, y: 6, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 6, scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-100 z-50 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+                <h3 className="font-bold text-sm text-slate-800">Notifications</h3>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllRead}
+                    className="text-[11px] text-primary hover:underline font-medium"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              {/* List */}
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-sm">
+                    <Bell size={24} className="mx-auto mb-2 opacity-40" />
+                    <p>No notifications</p>
+                  </div>
+                ) : (
+                  notifications.map(notif => (
+                    <button
+                      key={notif.id}
+                      onClick={() => handleClick(notif)}
+                      className={`w-full text-left p-3 border-b border-slate-50 hover:bg-slate-50 transition-colors flex items-start gap-3 ${
+                        !notif.isRead ? 'bg-blue-50/40' : ''
+                      }`}
+                    >
+                      <div
+                        className="mt-0.5 w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ background: notif.color + '15', color: notif.color }}
+                      >
+                        {notif.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-800">{notif.title}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{notif.message}</p>
+                      </div>
+                      <ChevronRight size={12} className="text-slate-300 mt-1 flex-shrink-0" />
+                    </button>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default NotificationBell;

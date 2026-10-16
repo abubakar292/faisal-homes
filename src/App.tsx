@@ -1,0 +1,222 @@
+import React, { Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+
+import { SplashScreen, LoaderProvider, useLoader } from './components/brand';
+import { initMotionDebug } from './components/brand/motionDebug';
+import { useEffect, useState } from 'react';
+
+initMotionDebug();
+import Layout from './components/layout/Layout';
+
+// ─── Lazy page imports ────────────────────────────────────────────────────────
+const Login    = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+
+// Plots
+const AddPlot        = lazy(() => import('./pages/plots/AddPlot'));
+const PlotList       = lazy(() => import('./pages/plots/PlotList'));
+const PlotDetail     = lazy(() => import('./pages/plots/PlotDetail'));
+const PlotCategories = lazy(() => import('./pages/plots/PlotCategories'));
+const PlotMap        = lazy(() => import('./pages/plots/PlotMap'));
+
+// Customers
+const AddCustomer    = lazy(() => import('./pages/customers/AddCustomer'));
+const CustomerList   = lazy(() => import('./pages/customers/CustomerList'));
+const CustomerDetail = lazy(() => import('./pages/customers/CustomerDetail'));
+
+// Bookings
+const NewBooking  = lazy(() => import('./pages/bookings/NewBooking'));
+const BookingList = lazy(() => import('./pages/bookings/BookingList'));
+
+// Sales
+const AssignPlot       = lazy(() => import('./pages/sales/AssignPlot'));
+const AssignedPlotsList = lazy(() => import('./pages/sales/AssignedPlotsList'));
+const PlotAgreement    = lazy(() => import('./pages/sales/PlotAgreement'));
+
+// Payments
+const PaymentPlans    = lazy(() => import('./pages/payments/PaymentPlans'));
+const ReceivePayment  = lazy(() => import('./pages/payments/ReceivePayment'));
+const PaymentHistory  = lazy(() => import('./pages/payments/PaymentHistory'));
+const DownPayments    = lazy(() => import('./pages/payments/DownPayments'));
+const DownPaymentLedger = lazy(() => import('./pages/payments/DownPaymentLedger'));
+const ReceiveDownPayment = lazy(() => import('./pages/payments/ReceiveDownPayment'));
+
+// Dealers
+const AddDealer       = lazy(() => import('./pages/dealers/AddDealer'));
+const DealerList      = lazy(() => import('./pages/dealers/DealerList'));
+const DealerCommission = lazy(() => import('./pages/dealers/DealerCommission'));
+
+
+
+// Reports
+const DailyReport            = lazy(() => import('./pages/reports/DailyReport'));
+const SaleReport             = lazy(() => import('./pages/reports/SaleReport'));
+const BookingReport          = lazy(() => import('./pages/reports/BookingReport'));
+const InstallmentReport      = lazy(() => import('./pages/reports/InstallmentReport'));
+const CollectionReport       = lazy(() => import('./pages/reports/CollectionReport'));
+const PendingPaymentsReport  = lazy(() => import('./pages/reports/PendingPaymentsReport'));
+const CustomerLedger         = lazy(() => import('./pages/reports/CustomerLedger'));
+const DealerCommissionReport = lazy(() => import('./pages/reports/DealerCommissionReport'));
+const PlotStatusReport       = lazy(() => import('./pages/reports/PlotStatusReport'));
+const ShortageList           = lazy(() => import('./pages/reports/ShortageList'));
+const TermsAndConditions     = lazy(() => import('./pages/reports/TermsAndConditions'));
+
+// Settings
+const CompanyInfo     = lazy(() => import('./pages/settings/CompanyInfo'));
+const UsersManagement = lazy(() => import('./pages/settings/UsersManagement'));
+const BackupData      = lazy(() => import('./pages/settings/BackupData'));
+
+import { PageLoading } from './components/brand';
+
+const PageSuspense: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Suspense fallback={<PageLoading />}>
+    {children}
+  </Suspense>
+);
+
+// ─── Protected Route ──────────────────────────────────────────────────────────
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser, loading } = useAuth();
+  if (loading) return null;
+  if (!currentUser) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
+
+// ─── App Inner ────────────────────────────────────────────────────────────────
+const AppInner: React.FC = () => {
+  const { loading, currentUser } = useAuth();
+  const [splashDone, setSplashDone] = useState(false);
+  const [appMounted, setAppMounted] = useState(false);
+
+  // appMounted state starts as false. The splash screen sets it to true when the intro finishes.
+  return (
+    <>
+      {!splashDone && (
+        <SplashScreen 
+          ready={!loading} 
+          appMounted={appMounted}
+          setAppMounted={setAppMounted}
+          onDone={() => setSplashDone(true)} 
+        />
+      )}
+      {appMounted && (
+        <div id="app-shell" style={{ opacity: 0 }}>
+          <PageSuspense>
+            <Routes>
+        {/* Public routes */}
+        <Route path="/login"    element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        {/* Protected layout routes */}
+        <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+
+          {/* Plots */}
+          <Route path="plots/add"           element={<AddPlot />} />
+          <Route path="plots/list"          element={<PlotList />} />
+          <Route path="plots/edit/:id"      element={<AddPlot />} />
+          <Route path="plots/categories"    element={<PlotCategories />} />
+          <Route path="plots/map"           element={<PlotMap />} />
+          <Route path="plots/:id"           element={<PlotDetail />} />
+
+          {/* Customers */}
+          <Route path="customers/add"       element={<AddCustomer />} />
+          <Route path="customers/list"      element={<CustomerList />} />
+          <Route path="customers/edit/:id"  element={<AddCustomer />} />
+          <Route path="customers/:id"       element={<CustomerDetail />} />
+
+          {/* Bookings */}
+          <Route path="bookings/new"        element={<NewBooking />} />
+          <Route path="bookings/list"       element={<BookingList />} />
+
+          {/* Sales */}
+          <Route path="sales/new"           element={<AssignPlot />} />
+          <Route path="sales/list"          element={<AssignedPlotsList />} />
+          <Route path="sales/agreement"     element={<PlotAgreement />} />
+
+          {/* Payments */}
+          <Route path="payment-plans/new"         element={<PaymentPlans />} />
+          <Route path="payment-plans/list"         element={<PaymentPlans />} />
+          <Route path="payments/receive"           element={<ReceivePayment />} />
+          <Route path="payments/possession"        element={<ReceivePayment possessionMode />} />
+          <Route path="payments/history"           element={<PaymentHistory />} />
+          <Route path="payments/down-payments"     element={<DownPayments />} />
+          <Route path="payments/down-payment-ledger" element={<DownPaymentLedger />} />
+          <Route path="payments/receive-down-payment" element={<ReceiveDownPayment />} />
+
+          {/* Dealers */}
+          <Route path="dealers/add"         element={<AddDealer />} />
+          <Route path="dealers/list"        element={<DealerList />} />
+          <Route path="dealers/edit/:id"    element={<AddDealer />} />
+          <Route path="dealers/commission"  element={<DealerCommission />} />
+          <Route path="dealers/report"      element={<DealerCommissionReport />} />
+
+
+
+          {/* Reports */}
+          <Route path="reports/daily"              element={<DailyReport />} />
+          <Route path="reports/sales"              element={<SaleReport />} />
+          <Route path="reports/bookings"           element={<BookingReport />} />
+          <Route path="reports/installments"       element={<InstallmentReport />} />
+          <Route path="reports/collection"         element={<CollectionReport />} />
+          <Route path="reports/pending"            element={<PendingPaymentsReport />} />
+          <Route path="reports/pending/customer/:customerId" element={<CustomerLedger />} />
+          <Route path="reports/dealer-commission"  element={<DealerCommissionReport />} />
+          <Route path="reports/plot-status"        element={<PlotStatusReport />} />
+          <Route path="reports/shortage-list"      element={<ShortageList />} />
+
+          {/* Settings */}
+          <Route path="settings/company"   element={<CompanyInfo />} />
+          <Route path="settings/users"     element={<UsersManagement />} />
+          <Route path="settings/backup"    element={<BackupData />} />
+          <Route path="settings/terms"     element={<TermsAndConditions />} />
+
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+        </PageSuspense>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ─── Root ─────────────────────────────────────────────────────────────────────
+const App: React.FC = () => (
+  <BrowserRouter>
+    <AuthProvider>
+      <LoaderProvider>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 3500,
+          style: {
+            borderRadius:  '12px',
+            fontSize:      '13px',
+            fontFamily:    'Inter, sans-serif',
+            boxShadow:     '0 4px 16px rgba(0,0,0,0.12)',
+          },
+          success: {
+            style: { borderLeft: '4px solid #22c55e' },
+            iconTheme: { primary: '#22c55e', secondary: '#fff' },
+          },
+          error: {
+            style: { borderLeft: '4px solid #ef4444' },
+            iconTheme: { primary: '#ef4444', secondary: '#fff' },
+          },
+        }}
+      />
+      <AppInner />
+          </LoaderProvider>
+    </AuthProvider>
+  </BrowserRouter>
+);
+
+export default App;
