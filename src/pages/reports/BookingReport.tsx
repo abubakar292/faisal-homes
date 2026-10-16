@@ -66,7 +66,7 @@ const BookingReport: React.FC = () => {
             
             <select className="input-field w-32" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="">All Status</option>
-              {['pending','confirmed','cancelled'].map(s => <option key={s} value={s}>{s}</option>)}
+              {['pending','confirmed','converted','cancelled'].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <button onClick={handlePrint} className="btn-primary"><Printer size={15} /> Print</button>
             

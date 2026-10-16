@@ -5,7 +5,7 @@ export type SizeUnit = 'Marla' | 'Kanal' | 'Sq.Ft';
 export type PlotCategory = 'Residential' | 'Commercial' | 'Corner' | 'Industrial' | string;
 export type PaymentMethod = 'Cash' | 'Bank Transfer' | 'Cheque';
 export type InstallmentStatus = 'pending' | 'paid' | 'overdue' | 'upcoming' | 'partial' | 'cancelled';
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled';
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'converted';
 export type CommissionType = 'percentage' | 'fixed';
 export type InvestmentType = 'Plot' | 'Cash' | 'Both';
 export type UserRole = 'admin' | 'staff' | 'owner';
@@ -121,7 +121,8 @@ export interface Sale {
   saleNumber: string;
   customerId: string;
   plotId: string;
-  bookingId: string;
+  bookingId?: string;
+  perMarlaRate?: number;
   saleDate: Date;
   totalPrice: number;
   bookingAmountPaid: number;    // amount already paid at booking

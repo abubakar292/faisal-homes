@@ -21,11 +21,13 @@ const BookingList: React.FC = () => {
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const filteredBookings = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return bookings;
     return bookings.filter(b => {
+      if (statusFilter && b.status !== statusFilter) return false;
+      if (!q) return true;
       const customer = customers.find(c => c.id === b.customerId);
       const plot = plots.find(p => p.id === b.plotId);
       return (
@@ -38,7 +40,7 @@ const BookingList: React.FC = () => {
         (plot?.block || '').toLowerCase().includes(q)
       );
     });
-  }, [bookings, customers, plots, searchQuery]);
+  }, [bookings, customers, plots, searchQuery, statusFilter]);
 
   const load = async () => {
     setLoading(true);
@@ -97,7 +99,7 @@ const BookingList: React.FC = () => {
       render: r => (
         <div className="flex items-center gap-1">
           <button onClick={() => handlePrint(r as unknown as Booking)} className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-500" title="Print Receipt"><Printer size={15} /></button>
-          {(r.status as string) !== 'cancelled' && (
+          {((r.status as string) === 'confirmed' || (r.status as string) === 'pending') && (
             <button onClick={() => setCancelId(r.id as string)} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500" title="Cancel Booking"><XCircle size={15} /></button>
           )}
         </div>
@@ -110,20 +112,33 @@ const BookingList: React.FC = () => {
       <PageHeader title="Booking List" subtitle={`${bookings.length} bookings`} icon={<BookOpen size={20} />}
         actions={<button onClick={() => navigate('/bookings/new')} className="btn-primary">+ New Booking</button>} />
       <div className="card">
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search by receipt#, customer name, ID, father name, phone, plot..."
-            className="input-field pl-9 pr-8"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-              <X size={14} />
-            </button>
-          )}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by receipt#, customer name, ID, father name, phone, plot..."
+              className="input-field pl-9 pr-8"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <select
+            className="input-field sm:w-44"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+          >
+            <option value="">All Statuses</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="converted">Converted</option>
+            <option value="pending">Pending</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
         </div>
         <DataTable
           columns={columns}

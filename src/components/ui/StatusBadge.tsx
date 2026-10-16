@@ -19,6 +19,7 @@ const map: Record<string, { cls: string; label: string }> = {
   overdue:    { cls: 'badge-overdue',    label: 'Overdue' },
   upcoming:   { cls: 'badge-upcoming',   label: 'Upcoming' },
   confirmed:  { cls: 'badge-confirmed',  label: 'Confirmed' },
+  converted:  { cls: 'badge-converted',  label: 'Converted' },
   active:     { cls: 'badge-active',     label: 'Active' },
   completed:  { cls: 'badge-completed',  label: 'Completed' },
 };
@@ -27,7 +28,7 @@ const dotColors: Record<string, string> = {
   available: '#15803d', booked: '#b45309', sold: '#1d4ed8',
   cancelled: '#b91c1c', reserved: '#7c3aed', paid: '#15803d',
   pending: '#b45309', overdue: '#b91c1c', upcoming: '#0369a1',
-  confirmed: '#15803d', active: '#15803d', completed: '#1d4ed8',
+  confirmed: '#15803d', converted: '#0f766e', active: '#15803d', completed: '#1d4ed8',
 };
 
 const StatusBadge: React.FC<Props> = ({ status, size = 'md', dot = false }) => {
