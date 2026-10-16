@@ -253,7 +253,7 @@ const CustomerLedger: React.FC = () => {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Overdue Amount</p>
             <div className="p-1.5 bg-red-100 rounded-lg text-red-600"><TrendingDown size={16} /></div>
           </div>
-          <p className="text-2xl font-black text-red-600">Rs. {formatCurrency(st.kpis.overdueAmount)}</p>
+          <p className="text-2xl font-black text-red-600">{formatCurrency(st.kpis.overdueAmount)}</p>
         </div>
         <div onClick={() => setStatusFilter(f => f === 'pending' ? 'all' : 'pending')} className={`card border-l-4 cursor-pointer transition-all ${statusFilter === 'pending' ? 'ring-2 ring-amber-500' : 'hover:bg-slate-50'}`} style={{ borderLeftColor: '#f59e0b' }}>
           <div className="flex items-center justify-between mb-2">
@@ -267,7 +267,7 @@ const CustomerLedger: React.FC = () => {
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Amount</p>
             <div className="p-1.5 bg-amber-100 rounded-lg text-amber-600"><CreditCard size={16} /></div>
           </div>
-          <p className="text-2xl font-black text-amber-600">Rs. {formatCurrency(st.kpis.pendingAmount)}</p>
+          <p className="text-2xl font-black text-amber-600">{formatCurrency(st.kpis.pendingAmount)}</p>
         </div>
       </div>
 
@@ -276,17 +276,17 @@ const CustomerLedger: React.FC = () => {
         <div className="flex flex-wrap md:flex-nowrap justify-between gap-6 items-center">
           <div>
             <p className="text-xs text-slate-500 font-semibold mb-1">Final Price</p>
-            <p className="text-lg font-bold text-slate-800">Rs. {formatCurrency(st.summary.finalPrice)}</p>
+            <p className="text-lg font-bold text-slate-800">{formatCurrency(st.summary.finalPrice)}</p>
           </div>
           <div className="hidden md:block w-px h-10 bg-slate-300"></div>
           <div>
             <p className="text-xs text-slate-500 font-semibold mb-1">Total Received</p>
-            <p className="text-lg font-bold text-green-600">Rs. {formatCurrency(st.summary.totalReceived)}</p>
+            <p className="text-lg font-bold text-green-600">{formatCurrency(st.summary.totalReceived)}</p>
           </div>
           <div className="hidden md:block w-px h-10 bg-slate-300"></div>
           <div>
             <p className="text-xs text-slate-500 font-semibold mb-1">Remaining Balance</p>
-            <p className="text-xl font-black text-primary">Rs. {formatCurrency(st.summary.remainingBalance)}</p>
+            <p className="text-xl font-black text-primary">{formatCurrency(st.summary.remainingBalance)}</p>
           </div>
           <div className="w-full md:w-64">
             <div className="flex justify-between text-xs mb-1 font-bold">
@@ -322,24 +322,24 @@ const CustomerLedger: React.FC = () => {
             <div className="p-4 grid grid-cols-2 gap-4 text-sm flex-1">
               <div>
                 <p className="text-xs text-slate-500">Final Price</p>
-                <p className="font-bold">Rs. {formatCurrency(sb.finalPrice)}</p>
+                <p className="font-bold">{formatCurrency(sb.finalPrice)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">Booking Paid</p>
-                <p className="font-bold text-green-600">Rs. {formatCurrency(sb.bookingPaid)}</p>
+                <p className="font-bold text-green-600">{formatCurrency(sb.bookingPaid)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">Down Payment Expected</p>
-                <p className="font-bold">Rs. {formatCurrency(sb.downPayment.expected)}</p>
+                <p className="font-bold">{formatCurrency(sb.downPayment.expected)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">DP Remaining</p>
-                <p className="font-bold text-amber-600">Rs. {formatCurrency(sb.downPayment.remaining)}</p>
+                <p className="font-bold text-amber-600">{formatCurrency(sb.downPayment.remaining)}</p>
               </div>
               {sb.onPossession.enabled && (
                 <div className="col-span-2 bg-slate-50 p-2 rounded border border-slate-100 flex justify-between items-center">
                   <span className="text-xs font-bold text-slate-600">On Possession</span>
-                  <span className={`font-bold ${sb.onPossession.status === 'Paid' ? 'text-green-600' : 'text-slate-700'}`}>Rs. {formatCurrency(sb.onPossession.amount)} ({sb.onPossession.status})</span>
+                  <span className={`font-bold ${sb.onPossession.status === 'Paid' ? 'text-green-600' : 'text-slate-700'}`}>{formatCurrency(sb.onPossession.amount)} ({sb.onPossession.status})</span>
                 </div>
               )}
             </div>

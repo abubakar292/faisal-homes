@@ -52,6 +52,7 @@ const DealerCommission = lazy(() => import('./pages/dealers/DealerCommission'));
 
 
 // Reports
+const ReportsHub             = lazy(() => import('./pages/reports/ReportsHub'));
 const DailyReport            = lazy(() => import('./pages/reports/DailyReport'));
 const SaleReport             = lazy(() => import('./pages/reports/SaleReport'));
 const BookingReport          = lazy(() => import('./pages/reports/BookingReport'));
@@ -165,6 +166,7 @@ const AppInner: React.FC = () => {
 
 
           {/* Reports */}
+          <Route path="reports"                    element={<ReportsHub />} />
           <Route path="reports/daily"              element={<DailyReport />} />
           <Route path="reports/sales"              element={<SaleReport />} />
           <Route path="reports/bookings"           element={<BookingReport />} />

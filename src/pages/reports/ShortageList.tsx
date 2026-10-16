@@ -1,18 +1,20 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { AlertTriangle, MessageCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
 import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
-import { AlertCircle, Search, MessageCircle, Printer, X, Filter } from 'lucide-react';
-import PageHeader from '../../components/ui/PageHeader';
 import { subscribeCollection, getCollection, getDocument } from '../../firebase/firestore';
 import { formatCurrency, formatDate, isInstallmentOverdue, daysOverdue, getOutstanding } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Installment, Customer, Plot, Sale, CompanySettings } from '../../types';
-import { BrandLoader } from '../../components/brand';
 
 type AgeFilter = 'all' | '1-30' | '31-60' | '61-90' | '90+';
 
 interface ShortageRow {
   id: string;
   customerId: string;
+  rawCustomerId: string;
   customerName: string;
   fatherName: string;
   phone: string;
@@ -26,30 +28,37 @@ interface ShortageRow {
 }
 
 const ShortageList: React.FC = () => {
+  const navigate = useNavigate();
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [installments, setInstallments] = useState<Installment[]>([]);
-  const [customers, setCustomers]       = useState<Customer[]>([]);
-  const [plots, setPlots]               = useState<Plot[]>([]);
-  const [sales, setSales]               = useState<Sale[]>([]);
-  const [company, setCompany]           = useState<CompanySettings | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [search, setSearch]             = useState('');
-  const [ageFilter, setAgeFilter]       = useState<AgeFilter>('all');
-  const [filterBlock, setFilterBlock]   = useState('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [plots, setPlots] = useState<Plot[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [company, setCompany] = useState<CompanySettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [ageFilter, setAgeFilter] = useState<AgeFilter>('all');
+  const [filterBlock, setFilterBlock] = useState('');
 
   useEffect(() => {
     const loadStatic = async () => {
-      const [c, p, s] = await Promise.all([
-        getCollection<Customer>('customers'),
-        getCollection<Plot>('plots'),
-        getCollection<Sale>('sales'),
-      ]);
-      setCustomers(c);
-      setPlots(p);
-      setSales(s);
-      const comp = await getDocument<CompanySettings>('settings', 'company');
-      if (comp) setCompany(comp);
-      setLoading(false);
+      try {
+        const [c, p, s] = await Promise.all([
+          getCollection<Customer>('customers'),
+          getCollection<Plot>('plots'),
+          getCollection<Sale>('sales'),
+        ]);
+        setCustomers(c);
+        setPlots(p);
+        setSales(s);
+        const comp = await getDocument<CompanySettings>('settings', 'company');
+        if (comp) setCompany(comp);
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to load shortage list metadata');
+      } finally {
+        setLoading(false);
+      }
     };
     loadStatic();
 
@@ -67,20 +76,21 @@ const ShortageList: React.FC = () => {
       if (sale?.status === 'cancelled') return;
 
       const customer = customers.find(c => c.id === inst.customerId);
-      const plot     = plots.find(p => p.id === inst.plotId);
+      const plot = plots.find(p => p.id === inst.plotId);
       if (!customer || !plot) return;
 
       const due = new Date(inst.dueDate!);
       const dDiff = daysOverdue(inst);
 
       let instNum: string | number = inst.installmentNumber;
-      if (inst.type === 'semi_annual')    instNum = 'Semi-Annual';
-      if (inst.type === 'on_possession')  instNum = 'Possession';
-      if (inst.type === 'down_payment')   instNum = 'Down Payment';
+      if (inst.type === 'semi_annual')   instNum = 'Semi-Annual';
+      if (inst.type === 'on_possession') instNum = 'Possession';
+      if (inst.type === 'down_payment')  instNum = 'Down Payment';
 
       rows.push({
         id: inst.id,
         customerId: customer.customerId,
+        rawCustomerId: customer.id,
         customerName: customer.name,
         fatherName: customer.fatherName || '',
         phone: customer.phone,
@@ -107,8 +117,7 @@ const ShortageList: React.FC = () => {
       if (ageFilter === '90+' && row.daysDiff <= 90) return false;
 
       if (filterBlock && row.block !== filterBlock) return false;
-      
-      // We also check dateRange if it is provided
+
       if (dateRange.start && row.dueDate < dateRange.start) return false;
       if (dateRange.end && row.dueDate > dateRange.end) return false;
 
@@ -129,14 +138,14 @@ const ShortageList: React.FC = () => {
     });
   }, [allRows, ageFilter, filterBlock, search, dateRange]);
 
-  const totalAmount    = filteredRows.reduce((s, r) => s + r.amountDue, 0);
-  
-  const c30 = allRows.filter(r => r.daysDiff >= 1 && r.daysDiff <= 30).length;
-  const c60 = allRows.filter(r => r.daysDiff >= 31 && r.daysDiff <= 60).length;
-  const c90 = allRows.filter(r => r.daysDiff >= 61 && r.daysDiff <= 90).length;
-  const c90p = allRows.filter(r => r.daysDiff > 90).length;
-  
-  const uniqueBlocks   = Array.from(new Set(plots.map(p => p.block))).sort();
+  const totalAmount = useMemo(() => filteredRows.reduce((s, r) => s + r.amountDue, 0), [filteredRows]);
+
+  const c30 = useMemo(() => allRows.filter(r => r.daysDiff >= 1 && r.daysDiff <= 30).length, [allRows]);
+  const c60 = useMemo(() => allRows.filter(r => r.daysDiff >= 31 && r.daysDiff <= 60).length, [allRows]);
+  const c90 = useMemo(() => allRows.filter(r => r.daysDiff >= 61 && r.daysDiff <= 90).length, [allRows]);
+  const c90p = useMemo(() => allRows.filter(r => r.daysDiff > 90).length, [allRows]);
+
+  const uniqueBlocks = useMemo(() => Array.from(new Set(plots.map(p => p.block))).sort(), [plots]);
 
   const handleWhatsApp = (row: ShortageRow) => {
     let phone = row.phone.replace(/[^0-9]/g, '');
@@ -149,8 +158,8 @@ const ShortageList: React.FC = () => {
   };
 
   const handlePrint = () => {
-    if (!company) { alert('Configure company settings'); return; }
-    
+    if (!company) { toast.error('Configure company settings first'); return; }
+
     const rows = filteredRows.map(row => [
       row.customerId,
       `${row.customerName} (${row.fatherName})`,
@@ -158,171 +167,163 @@ const ShortageList: React.FC = () => {
       `${row.plotNumber} (${row.block})`,
       row.installmentNumber.toString(),
       formatDate(row.dueDate),
-      `${row.daysDiff}d overdue`,
-      formatCurrency(row.amountDue)
+      formatCurrency(row.amountDue),
+      `${row.daysDiff} days`,
     ]);
-    
+
     const html = generateReportHTML(
       company,
-      'Shortage List',
-      ['Cust ID', 'Name / Father', 'Phone', 'Plot', 'Inst#', 'Due Date', 'Status', 'Amount'],
+      'Shortage List (Overdue Payments Only)',
+      ['Cust ID', 'Customer Name', 'Phone', 'Plot', 'Inst #', 'Due Date', 'Amount Due', 'Overdue Days'],
       rows,
-      `Total Records: ${filteredRows.length} | Total Amount: ${formatCurrency(totalAmount)}`
+      `Total Overdue: ${formatCurrency(totalAmount)} | ${filteredRows.length} overdue installments`
     );
-    printContent(html, 'Shortage List');
+    printContent(html, 'Shortage-List');
   };
 
-  const filterBtn = (val: AgeFilter, label: string, count: number, color: string) => (
-    <button
-      onClick={() => setAgeFilter(val)}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-      style={ageFilter === val
-        ? { background: color, color: 'white' }
-        : { background: '#f1f5f9', color: '#475569' }}
-    >
-      {label} <span className="opacity-70">({count})</span>
-    </button>
-  );
+  const handleExportCsv = () => {
+    const headers = ['Customer ID', 'Customer Name', 'Father Name', 'Phone', 'CNIC', 'Plot Number', 'Block', 'Installment #', 'Due Date', 'Amount Due', 'Days Overdue'];
+    const rows = filteredRows.map(r => [
+      r.customerId,
+      r.customerName,
+      r.fatherName,
+      r.phone,
+      r.cnic,
+      r.plotNumber,
+      r.block,
+      r.installmentNumber,
+      formatDate(r.dueDate),
+      r.amountDue,
+      r.daysDiff
+    ]);
+    exportRowsToCsv('Shortage-List', headers, rows);
+  };
+
+  const kpis = [
+    { label: 'Total Overdue', value: filteredRows.length, color: 'red' as const, hint: 'Overdue installments' },
+    { label: 'Overdue Amount', value: totalAmount, isCurrency: true, color: 'red' as const, hint: 'Total recovery target' },
+    { label: 'Critical (>90 Days)', value: c90p, color: 'red' as const, hint: 'High risk defaulters' },
+    { label: '30-90 Days Due', value: c60 + c90, color: 'amber' as const, hint: 'Moderate overdue' },
+  ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Shortage List"
-        subtitle="Track all unpaid overdue installments"
-        icon={<AlertCircle size={24} />}
-      />
-      <ReportFilters 
-        search={search}
-        onSearchChange={setSearch}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
-        actions={<>
-          <button onClick={handlePrint} className="btn-primary">
-            <Printer size={16} /> Print List
-          </button>
-        </>}
-      />
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="card border-l-4" style={{ borderLeftColor: '#dc2626' }}>
-          <p className="text-xs text-slate-500">Overdue Installments</p>
-          <p className="text-2xl font-extrabold animate-count" style={{ color: '#dc2626' }}>{allRows.length}</p>
+    <ReportLayout
+      reportName="Shortage List"
+      title="Overdue Recovery Shortage List"
+      subtitle="Urgent recovery shortlist of all overdue installments with WhatsApp reminder links"
+      icon={<AlertTriangle size={18} />}
+      onPrint={handlePrint}
+      onExportCsv={handleExportCsv}
+      kpis={kpis}
+      loading={loading}
+      topContent={
+        <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm text-xs">
+          <span className="font-bold text-slate-600 mr-1">Overdue Aging:</span>
+          {(['all', '1-30', '31-60', '61-90', '90+'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setAgeFilter(f)}
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
+                ageFilter === f
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {f === 'all' ? `All (${allRows.length})` : f === '90+' ? `90+ Days (${c90p})` : `${f} Days`}
+            </button>
+          ))}
         </div>
-        <div className="card border-l-4" style={{ borderLeftColor: '#b45309' }}>
-          <p className="text-xs text-slate-500">Customers in Shortage</p>
-          <p className="text-2xl font-extrabold animate-count" style={{ color: '#b45309' }}>{new Set(allRows.map(r => r.customerId)).size}</p>
-        </div>
-        <div className="card border-l-4" style={{ borderLeftColor: '#1a3c6e' }}>
-          <p className="text-xs text-slate-500">Total Overdue Amount</p>
-          <p className="text-xl font-extrabold animate-count" style={{ color: '#1a3c6e' }}>{formatCurrency(allRows.reduce((a, b) => a + b.amountDue, 0))}</p>
-        </div>
-        <div className="card border-l-4" style={{ borderLeftColor: '#16a34a' }}>
-          <p className="text-xs text-slate-500">Longest Overdue</p>
-          <p className="text-2xl font-extrabold animate-count" style={{ color: '#16a34a' }}>{allRows.length ? Math.max(...allRows.map(r => r.daysDiff)) : 0}d</p>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, ID, father name, phone, CNIC, plot..."
-              className="input-field pl-9 pr-8"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                <X size={14} />
-              </button>
-            )}
-          </div>
-          <div className="relative min-w-[130px]">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <select className="input-field pl-9" value={filterBlock} onChange={e => setFilterBlock(e.target.value)}>
+      }
+      filterCard={
+        <ReportFilters
+          search={search}
+          onSearchChange={setSearch}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          searchPlaceholder="Search customer, CNIC, phone, or plot..."
+          extraFilters={
+            <select
+              className="input-field w-36 text-xs"
+              value={filterBlock}
+              onChange={e => setFilterBlock(e.target.value)}
+            >
               <option value="">All Blocks</option>
-              {uniqueBlocks.map(b => <option key={b} value={b}>Block {b}</option>)}
+              {uniqueBlocks.map(b => (
+                <option key={b} value={b}>Block {b}</option>
+              ))}
             </select>
-          </div>
+          }
+        />
+      }
+      footerContent={
+        <div className="flex justify-between items-center font-bold">
+          <span>Overdue Count: {filteredRows.length} installments</span>
+          <span className="text-rose-700">Total Defaulter Balance: {formatCurrency(totalAmount)}</span>
         </div>
-
-        <div className="flex flex-wrap gap-2 mb-4">
-          {filterBtn('all', 'All Overdue', allRows.length, '#1a3c6e')}
-          {filterBtn('1-30', '1-30 days', c30, '#eab308')}
-          {filterBtn('31-60', '31-60 days', c60, '#f97316')}
-          {filterBtn('61-90', '61-90 days', c90, '#ef4444')}
-          {filterBtn('90+', '90+ days', c90p, '#991b1b')}
-        </div>
-
-        {loading ? (
-          <BrandLoader />
-        ) : filteredRows.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <AlertCircle size={40} className="mx-auto mb-3 opacity-30" />
-            <p>No overdue records found</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50">
-                <tr>
-                  {['ID', 'Customer', 'Plot', 'Inst#', 'Due Date', 'Status', 'Amount', 'Action'].map(h => (
-                    <th key={h} className="table-th text-left text-xs">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map(row => (
-                  <tr key={row.id} className="table-row">
-                    <td className="table-td">
-                      <span className="font-mono text-xs" style={{ color: '#1d4ed8' }}>{row.customerId}</span>
-                    </td>
-                    <td className="table-td">
-                      <p className="font-semibold text-slate-800 text-sm">{row.customerName}</p>
-                      {row.fatherName && <p className="text-xs text-slate-400">{row.fatherName}</p>}
-                      <p className="text-xs text-slate-400">{row.phone}</p>
-                    </td>
-                    <td className="table-td">
-                      <p className="font-semibold">{row.plotNumber}</p>
-                      <p className="text-xs text-slate-400">Block {row.block}</p>
-                    </td>
-                    <td className="table-td text-sm font-medium">{row.installmentNumber}</td>
-                    <td className="table-td text-sm">{formatDate(row.dueDate)}</td>
-                    <td className="table-td">
-                      <span className="text-xs font-bold text-red-600">{row.daysDiff}d overdue</span>
-                    </td>
-                    <td className="table-td">
-                      <span className="font-bold text-red-600">
-                        {formatCurrency(row.amountDue)}
-                      </span>
-                    </td>
-                    <td className="table-td">
-                      <button
-                        onClick={() => handleWhatsApp(row)}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:bg-green-50 transition-colors"
-                        style={{ color: '#16a34a' }}
-                      >
-                        <MessageCircle size={13} /> WA
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {filteredRows.length > 0 && (
-          <div className="mt-3 flex justify-end">
-            <div className="px-4 py-2 rounded-lg text-sm font-bold" style={{ background: '#1a3c6e', color: 'white' }}>
-              Total: {formatCurrency(totalAmount)} ({filteredRows.length} records)
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+      }
+    >
+      <table className="w-full text-left text-xs border-collapse">
+        <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600 sticky top-0 z-10">
+          <tr>
+            <th className="py-3 px-3">Customer</th>
+            <th className="py-3 px-3">Phone</th>
+            <th className="py-3 px-3">Plot</th>
+            <th className="py-3 px-3">Inst #</th>
+            <th className="py-3 px-3">Due Date</th>
+            <th className="py-3 px-3">Amount Due</th>
+            <th className="py-3 px-3">Days Overdue</th>
+            <th className="py-3 px-3 text-center">Remind</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredRows.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="py-12 text-center text-slate-400">
+                No overdue installments found! All payments up to date.
+              </td>
+            </tr>
+          ) : (
+            filteredRows.map(row => (
+              <tr key={row.id} className="border-b border-slate-100 hover:bg-red-50/30 transition-colors">
+                <td className="py-2.5 px-3">
+                  <button
+                    onClick={() => navigate(`/reports/pending/customer/${row.rawCustomerId}`)}
+                    className="font-bold text-primary hover:underline text-left block"
+                    title="Open Customer Ledger"
+                  >
+                    {row.customerName}
+                  </button>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {row.customerId} {row.fatherName ? `· s/o ${row.fatherName}` : ''}
+                  </span>
+                </td>
+                <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px]">{row.phone}</td>
+                <td className="py-2.5 px-3 text-slate-700 font-medium">
+                  {row.plotNumber} <span className="text-[10px] text-slate-400">({row.block})</span>
+                </td>
+                <td className="py-2.5 px-3 text-slate-600">#{row.installmentNumber}</td>
+                <td className="py-2.5 px-3 text-slate-500">{formatDate(row.dueDate)}</td>
+                <td className="py-2.5 px-3 font-bold text-rose-700">{formatCurrency(row.amountDue)}</td>
+                <td className="py-2.5 px-3 font-extrabold text-red-600">
+                  <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[11px]">
+                    {row.daysDiff} days
+                  </span>
+                </td>
+                <td className="py-2.5 px-3 text-center">
+                  <button
+                    onClick={() => handleWhatsApp(row)}
+                    className="p-1 hover:bg-emerald-50 rounded text-emerald-600 inline-flex transition-colors"
+                    title="Send WhatsApp Reminder"
+                  >
+                    <MessageCircle size={15} />
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </ReportLayout>
   );
 };
 

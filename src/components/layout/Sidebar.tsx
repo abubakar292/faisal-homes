@@ -74,7 +74,7 @@ const nav: NavGroup[] = [
   {
     label: 'Reports', icon: <BarChart2 size={16} />,
     children: [
-      { label: 'Overview', path: '/reports/daily', icon: <Calendar size={14} /> },
+      { label: 'Overview', path: '/reports', icon: <Calendar size={14} /> },
     ],
     subgroups: [
       {
@@ -87,6 +87,7 @@ const nav: NavGroup[] = [
       {
         subheading: 'COLLECTIONS',
         items: [
+          { label: 'Daily Report',     path: '/reports/daily',              icon: <Calendar size={14} /> },
           { label: 'Collection',       path: '/reports/collection',         icon: <DollarSign size={14} /> },
           { label: 'Installment',      path: '/reports/installments',       icon: <Receipt size={14} /> },
           { label: 'Pending Payments', path: '/reports/pending',            icon: <AlertCircle size={14} /> },

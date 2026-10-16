@@ -215,11 +215,10 @@ const DownPaymentLedger: React.FC = () => {
 
         {/* Booking entry (always first) */}
         <div className="flex items-start gap-3 p-3 rounded-lg mb-3" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-          <span className="text-2xl">📌</span>
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-center">
               <p className="font-semibold text-slate-800">Booking Amount</p>
-              <p className="font-bold text-lg" style={{ color: '#1a3c6e' }}>Rs. {formatCurrency(bookingPaid)}</p>
+              <p className="font-bold text-lg" style={{ color: '#1a3c6e' }}>{formatCurrency(bookingPaid)}</p>
             </div>
             <p className="text-xs text-slate-400 mt-1">Method: Cash &nbsp;·&nbsp; {formatDate(sale.saleDate)} &nbsp;·&nbsp; Auto-entry from booking</p>
           </div>
@@ -234,14 +233,13 @@ const DownPaymentLedger: React.FC = () => {
         {txns.map((tx, i) => (
           <div key={tx.id}>
             <div className="flex items-start gap-3 p-3 rounded-lg" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-              <span className="text-2xl">✅</span>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center">
                   <p className="font-semibold text-slate-800">Down Payment Received</p>
-                  <p className="font-bold text-lg" style={{ color: '#16a34a' }}>Rs. {formatCurrency(tx.amount)}</p>
+                  <p className="font-bold text-lg" style={{ color: '#16a34a' }}>{formatCurrency(tx.amount)}</p>
                 </div>
                 <div className="flex gap-3 text-xs text-slate-400 mt-1">
-                  <span>Method: {tx.paymentMethod}{tx.bankName ? ` — ${tx.bankName}` : ''}</span>
+                  <span>Method: {tx.paymentMethod}{tx.bankName ? ` - ${tx.bankName}` : ''}</span>
                   <span>·</span>
                   <span>{formatDate(tx.paymentDate)}</span>
                   {tx.notes && <><span>·</span><span>{tx.notes}</span></>}
@@ -260,11 +258,10 @@ const DownPaymentLedger: React.FC = () => {
           <>
             <div className="border-t border-dashed border-slate-200 my-3" />
             <div className="flex items-start gap-3 p-3 rounded-lg" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
-              <span className="text-2xl">⏳</span>
               <div className="flex-1">
                 <div className="flex justify-between items-center">
                   <p className="font-semibold" style={{ color: '#b91c1c' }}>Remaining Pending</p>
-                  <p className="font-bold text-lg" style={{ color: '#b91c1c' }}>Rs. {formatCurrency(stillPending)}</p>
+                  <p className="font-bold text-lg" style={{ color: '#b91c1c' }}>{formatCurrency(stillPending)}</p>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">Due: ASAP</p>
               </div>

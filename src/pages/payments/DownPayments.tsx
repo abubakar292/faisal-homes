@@ -213,11 +213,11 @@ export default function DownPayments() {
                         <p className="text-xs text-slate-500">Block {row.block}</p>
                       </td>
                       <td className="table-td py-3 px-4 text-sm font-medium text-slate-700">
-                        Rs. {formatCurrency(row.totalDownPayment)}
+                        {formatCurrency(row.totalDownPayment)}
                       </td>
                       <td className="table-td py-3 px-4 min-w-[150px]">
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-slate-500">Rec: Rs. {formatCurrency(row.receivedSoFar)}</span>
+                          <span className="text-slate-500">Rec: {formatCurrency(row.receivedSoFar)}</span>
                           <span className="font-medium text-slate-700">{progressPct}%</span>
                         </div>
                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -226,7 +226,7 @@ export default function DownPayments() {
                       </td>
                       <td className="table-td py-3 px-4">
                         <span className={`font-bold text-sm ${row.stillPending > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          Rs. {formatCurrency(row.stillPending)}
+                          {formatCurrency(row.stillPending)}
                         </span>
                       </td>
                       <td className="table-td py-3 px-4">{statusBadge(row.status)}</td>

@@ -382,10 +382,10 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
               <div className="flex items-start gap-3">
                 <AlertTriangle size={22} style={{ color: '#b91c1c', flexShrink: 0, marginTop: 2 }} />
                 <div className="flex-1">
-                  <p className="font-bold text-base" style={{ color: '#b91c1c' }}>⚠️ Installments Locked</p>
+                  <p className="font-bold text-base" style={{ color: '#b91c1c' }}>Installments Locked</p>
                   <p className="text-sm mt-1" style={{ color: '#7f1d1d' }}>
                     This customer has a pending down payment of{' '}
-                    <strong>Rs. {formatCurrency(dpPending)}</strong>.
+                    <strong>{formatCurrency(dpPending)}</strong>.
                     Please collect the remaining down payment first before accepting installments.
                   </p>
                   <Link
@@ -393,7 +393,7 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
                     className="inline-flex items-center gap-1 mt-3 px-3 py-1.5 rounded-lg text-sm font-semibold"
                     style={{ background: '#b91c1c', color: 'white' }}
                   >
-                    Go to Down Payments →
+                    Go to Down Payments &gt;
                   </Link>
                 </div>
               </div>

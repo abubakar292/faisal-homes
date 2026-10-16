@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
-import { BarChart2, Download, Printer } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { BarChart2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import PageHeader from '../../components/ui/PageHeader';
+import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
+import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
 import { getCollection, getDocument } from '../../firebase/firestore';
-import { formatCurrency, formatDate, formatDateInput } from '../../utils/formatters';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Sale, Customer, Plot, CompanySettings } from '../../types';
 
@@ -15,7 +15,8 @@ const SaleReport: React.FC = () => {
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
-  
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     Promise.all([
       getCollection<Sale>('sales'),
@@ -23,115 +24,173 @@ const SaleReport: React.FC = () => {
       getCollection<Plot>('plots'),
       getDocument<CompanySettings>('settings', 'company'),
     ]).then(([s, c, p, comp]) => {
-      setSales(s); setCustomers(c); setPlots(p);
+      setSales(s);
+      setCustomers(c);
+      setPlots(p);
       if (comp) setCompany(comp);
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      toast.error('Failed to load sales report data');
+      setLoading(false);
     });
   }, []);
 
-  const filtered = sales.filter(s => {
-    const d = new Date(s.saleDate);
-    if (dateRange.start && d < dateRange.start) return false;
-    if (dateRange.end && d > dateRange.end) return false;
-    return true;
-  });
-
-  const totalSales = filtered.reduce((sum, s) => sum + s.finalPrice, 0);
   const customerName = (id: string) => customers.find(c => c.id === id)?.name || '—';
-  const plotInfo = (id: string) => { const p = plots.find(pl => pl.id === id); return p ? { num: p.plotNumber, block: p.block, size: `${p.size} ${p.sizeUnit}` } : null; };
+  const plotInfo = (id: string) => {
+    const p = plots.find(pl => pl.id === id);
+    return p ? { num: p.plotNumber, block: p.block, size: `${p.size} ${p.sizeUnit}` } : null;
+  };
+
+  const filtered = useMemo(() => {
+    return sales.filter(s => {
+      const d = new Date(s.saleDate || s.createdAt);
+      if (dateRange.start && d < dateRange.start) return false;
+      if (dateRange.end && d > dateRange.end) return false;
+
+      if (search.trim()) {
+        const q = search.toLowerCase().trim();
+        const cName = customerName(s.customerId).toLowerCase();
+        const pi = plotInfo(s.plotId);
+        const pNum = (pi?.num || '').toLowerCase();
+        const pBlock = (pi?.block || '').toLowerCase();
+        const sNum = (s.saleNumber || '').toLowerCase();
+        if (!cName.includes(q) && !pNum.includes(q) && !pBlock.includes(q) && !sNum.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [sales, dateRange, search, customers, plots]);
+
+  const totalSales = useMemo(() => filtered.reduce((sum, s) => sum + (s.finalPrice || 0), 0), [filtered]);
+  const totalDownPayment = useMemo(() => filtered.reduce((sum, s) => sum + (s.downPayment || 0), 0), [filtered]);
+  const totalRemaining = useMemo(() => filtered.reduce((sum, s) => sum + (s.remainingAmount || 0), 0), [filtered]);
 
   const handlePrint = () => {
     if (!company) { toast.error('Configure company settings'); return; }
     const rows = filtered.map(s => {
       const pi = plotInfo(s.plotId);
-      return [s.saleNumber, customerName(s.customerId), pi?.num || '—', pi?.size || '—', formatCurrency(s.finalPrice), formatCurrency(s.downPayment), formatCurrency(s.remainingAmount), formatDate(s.saleDate)];
+      return [
+        s.saleNumber,
+        customerName(s.customerId),
+        pi?.num || '—',
+        pi?.size || '—',
+        formatCurrency(s.finalPrice),
+        formatCurrency(s.downPayment),
+        formatCurrency(s.remainingAmount),
+        formatDate(s.saleDate || s.createdAt)
+      ];
     });
-    const html = generateReportHTML(company, 'Sale Report', ['Sale #', 'Customer', 'Plot', 'Size', 'Final Price', 'Down Payment', 'Remaining', 'Date'], rows, `Total Sales: ${formatCurrency(totalSales)} | ${filtered.length} transactions`);
-    printContent(html, 'Report');
+    const html = generateReportHTML(
+      company,
+      'Sale Report',
+      ['Sale #', 'Customer', 'Plot', 'Size', 'Final Price', 'Down Payment', 'Remaining', 'Date'],
+      rows,
+      `Total Sales: ${formatCurrency(totalSales)} | ${filtered.length} transactions`
+    );
+    printContent(html, 'Sale-Report');
   };
 
   const handleExportCSV = () => {
     const headers = ['Sale #', 'Customer', 'Plot', 'Block', 'Size', 'Total Price', 'Discount', 'Final Price', 'Down Payment', 'Remaining', 'Date'];
     const rows = filtered.map(s => {
       const pi = plotInfo(s.plotId);
-      return [s.saleNumber, customerName(s.customerId), pi?.num || '', pi?.block || '', pi?.size || '', s.totalPrice, s.discount, s.finalPrice, s.downPayment, s.remainingAmount, formatDate(s.saleDate)];
+      return [
+        s.saleNumber,
+        customerName(s.customerId),
+        pi?.num || '',
+        pi?.block || '',
+        pi?.size || '',
+        s.totalPrice || s.finalPrice,
+        s.discount || 0,
+        s.finalPrice,
+        s.downPayment,
+        s.remainingAmount,
+        formatDate(s.saleDate || s.createdAt)
+      ];
     });
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'Sale-Report.csv'; a.click();
+    exportRowsToCsv('Sale-Report', headers, rows);
   };
 
+  const kpis = [
+    { label: 'Total Sales', value: filtered.length, color: 'navy' as const, hint: 'Transactions count' },
+    { label: 'Total Revenue', value: totalSales, isCurrency: true, color: 'green' as const, hint: 'Gross sales volume' },
+    { label: 'Down Payments', value: totalDownPayment, isCurrency: true, color: 'blue' as const, hint: 'Committed down payment' },
+    { label: 'Total Remaining', value: totalRemaining, isCurrency: true, color: 'red' as const, hint: 'Receivable installment balance' },
+  ];
+
   return (
-    <div>
-      <PageHeader
-        title="Sale Report"
-        subtitle="All plot sales in date range"
-        icon={<BarChart2 size={20} />}
-      />
-      <ReportFilters 
-        search={search}
-        onSearchChange={setSearch}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
-        actions={<>
-            <button onClick={handlePrint} className="btn-primary"><Printer size={15} /> Print</button>
-            <button onClick={handleExportCSV} className="btn-secondary"><Download size={15} /> CSV</button>
-            
-          </>}
-      />
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        {[
-          ['Total Sales', filtered.length, 'text-primary'],
-          ['Total Amount', formatCurrency(totalSales), 'text-green-600'],
-          ['Total Down Payments', formatCurrency(filtered.reduce((s, x) => s + x.downPayment, 0)), 'text-blue-600'],
-          ['Total Remaining', formatCurrency(filtered.reduce((s, x) => s + x.remainingAmount, 0)), 'text-red-500'],
-        ].map(([label, value, color]) => (
-          <div key={label as string} className="card text-center">
-            <p className={`text-xl font-bold ${color}`}>{value}</p>
-            <p className="text-xs text-slate-500 mt-1">{label}</p>
+    <ReportLayout
+      reportName="Sale Report"
+      title="Plot Sales Report"
+      subtitle="Detailed breakdown of all active and completed plot sales"
+      icon={<BarChart2 size={18} />}
+      onPrint={handlePrint}
+      onExportCsv={handleExportCSV}
+      kpis={kpis}
+      loading={loading}
+      filterCard={
+        <ReportFilters
+          search={search}
+          onSearchChange={setSearch}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          searchPlaceholder="Search sale #, customer, or plot..."
+        />
+      }
+      footerContent={
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-2 font-bold">
+          <span>Total Transactions: {filtered.length} sales</span>
+          <div className="flex gap-4">
+            <span className="text-emerald-700">Total: {formatCurrency(totalSales)}</span>
+            <span className="text-rose-700">Remaining: {formatCurrency(totalRemaining)}</span>
           </div>
-        ))}
-      </div>
-
-      <div className="card overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>{['Sale #', 'Customer', 'Plot', 'Block', 'Size', 'Final Price', 'Down Payment', 'Remaining', 'Date'].map(h => <th key={h} className="table-th">{h}</th>)}</tr>
-          </thead>
-          <tbody>
-            {filtered.map(s => {
+        </div>
+      }
+    >
+      <table className="w-full text-left text-xs border-collapse">
+        <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600 sticky top-0 z-10">
+          <tr>
+            <th className="py-3 px-3">Sale #</th>
+            <th className="py-3 px-3">Customer</th>
+            <th className="py-3 px-3">Plot</th>
+            <th className="py-3 px-3">Block</th>
+            <th className="py-3 px-3">Size</th>
+            <th className="py-3 px-3">Final Price</th>
+            <th className="py-3 px-3">Down Payment</th>
+            <th className="py-3 px-3">Remaining</th>
+            <th className="py-3 px-3">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.length === 0 ? (
+            <tr>
+              <td colSpan={9} className="py-12 text-center text-slate-400">
+                No sales found in the selected range.
+              </td>
+            </tr>
+          ) : (
+            filtered.map(s => {
               const pi = plotInfo(s.plotId);
               return (
-                <tr key={s.id} className="table-row">
-                  <td className="table-td font-mono text-xs font-semibold text-primary">{s.saleNumber}</td>
-                  <td className="table-td font-medium">{customerName(s.customerId)}</td>
-                  <td className="table-td font-mono">{pi?.num || '—'}</td>
-                  <td className="table-td">{pi?.block || '—'}</td>
-                  <td className="table-td">{pi?.size || '—'}</td>
-                  <td className="table-td font-semibold">{formatCurrency(s.finalPrice)}</td>
-                  <td className="table-td">{formatCurrency(s.downPayment)}</td>
-                  <td className="table-td text-red-500 font-semibold">{formatCurrency(s.remainingAmount)}</td>
-                  <td className="table-td">{formatDate(s.saleDate)}</td>
+                <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors">
+                  <td className="py-2.5 px-3 font-mono font-bold text-primary">{s.saleNumber}</td>
+                  <td className="py-2.5 px-3 font-semibold text-slate-800">{customerName(s.customerId)}</td>
+                  <td className="py-2.5 px-3 font-medium text-slate-700">{pi?.num || '—'}</td>
+                  <td className="py-2.5 px-3 text-slate-600">{pi?.block || '—'}</td>
+                  <td className="py-2.5 px-3 text-slate-600">{pi?.size || '—'}</td>
+                  <td className="py-2.5 px-3 font-bold text-slate-900">{formatCurrency(s.finalPrice)}</td>
+                  <td className="py-2.5 px-3 text-slate-700">{formatCurrency(s.downPayment)}</td>
+                  <td className="py-2.5 px-3 font-bold text-rose-600">{formatCurrency(s.remainingAmount)}</td>
+                  <td className="py-2.5 px-3 text-slate-500">{formatDate(s.saleDate || s.createdAt)}</td>
                 </tr>
               );
-            })}
-            {filtered.length === 0 && <tr><td colSpan={9} className="table-td text-center py-10 text-slate-400">No sales in selected date range</td></tr>}
-          </tbody>
-          {filtered.length > 0 && (
-            <tfoot className="bg-slate-50 border-t-2 border-slate-200">
-              <tr>
-                <td colSpan={5} className="table-td font-bold">Total ({filtered.length} sales)</td>
-                <td className="table-td font-bold text-green-600">{formatCurrency(totalSales)}</td>
-                <td className="table-td font-bold">{formatCurrency(filtered.reduce((s, x) => s + x.downPayment, 0))}</td>
-                <td className="table-td font-bold text-red-500">{formatCurrency(filtered.reduce((s, x) => s + x.remainingAmount, 0))}</td>
-                <td></td>
-              </tr>
-            </tfoot>
+            })
           )}
-        </table>
-      </div>
-    </div>
+        </tbody>
+      </table>
+    </ReportLayout>
   );
 };
 

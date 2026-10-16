@@ -351,7 +351,7 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
               {amountNum > 0 && !amountExceedsMax && (
                 <div className="flex justify-between items-center p-3 rounded-xl" style={{ background: '#dcfce7', border: '1px solid #86efac' }}>
                   <span className="text-sm font-semibold" style={{ color: '#15803d' }}>Amount to Receive</span>
-                  <span className="text-lg font-extrabold" style={{ color: '#15803d' }}>Rs. {formatCurrency(amountNum)}</span>
+                  <span className="text-lg font-extrabold" style={{ color: '#15803d' }}>{formatCurrency(amountNum)}</span>
                 </div>
               )}
             </>

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
-import { BookOpen, Download, Printer } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { BookOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
-import PageHeader from '../../components/ui/PageHeader';
+import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
+import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { getCollection, getDocument } from '../../firebase/firestore';
-import { formatCurrency, formatDate, formatDateInput } from '../../utils/formatters';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Booking, Customer, Plot, CompanySettings } from '../../types';
 
@@ -16,7 +16,8 @@ const BookingReport: React.FC = () => {
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
-    const [filterStatus, setFilterStatus] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -25,82 +26,162 @@ const BookingReport: React.FC = () => {
       getCollection<Plot>('plots'),
       getDocument<CompanySettings>('settings', 'company'),
     ]).then(([b, c, p, comp]) => {
-      setBookings(b); setCustomers(c); setPlots(p);
+      setBookings(b);
+      setCustomers(c);
+      setPlots(p);
       if (comp) setCompany(comp);
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      toast.error('Failed to load bookings report data');
+      setLoading(false);
     });
   }, []);
 
-  const filtered = bookings.filter(b => {
-    const d = new Date(b.bookingDate);
-    if (dateRange.start && d < dateRange.start) return false;
-    if (dateRange.end && d > dateRange.end) return false;
-    if (filterStatus && b.status !== filterStatus) return false;
-    return true;
-  });
-
   const customerName = (id: string) => customers.find(c => c.id === id)?.name || '—';
-  const plotInfo = (id: string) => { const p = plots.find(pl => pl.id === id); return p ? `${p.plotNumber}-${p.block}` : '—'; };
-  const totalAmount = filtered.reduce((s, b) => s + b.bookingAmount, 0);
+  const plotInfo = (id: string) => {
+    const p = plots.find(pl => pl.id === id);
+    return p ? `${p.plotNumber} - ${p.block}` : '—';
+  };
+
+  const filtered = useMemo(() => {
+    return bookings.filter(b => {
+      const d = new Date(b.bookingDate || b.createdAt);
+      if (dateRange.start && d < dateRange.start) return false;
+      if (dateRange.end && d > dateRange.end) return false;
+      if (filterStatus && b.status !== filterStatus) return false;
+
+      if (search.trim()) {
+        const q = search.toLowerCase().trim();
+        const cName = customerName(b.customerId).toLowerCase();
+        const pInfo = plotInfo(b.plotId).toLowerCase();
+        const rec = (b.receiptNumber || '').toLowerCase();
+        if (!cName.includes(q) && !pInfo.includes(q) && !rec.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [bookings, dateRange, filterStatus, search, customers, plots]);
+
+  const totalAmount = useMemo(() => filtered.reduce((s, b) => s + (b.bookingAmount || 0), 0), [filtered]);
 
   const handlePrint = () => {
     if (!company) { toast.error('Configure company settings'); return; }
-    const rows = filtered.map(b => [b.receiptNumber, customerName(b.customerId), plotInfo(b.plotId), formatDate(b.bookingDate), formatCurrency(b.bookingAmount), b.paymentMethod, b.status]);
-    const html = generateReportHTML(company, 'Booking Report', ['Receipt #', 'Customer', 'Plot', 'Date', 'Amount', 'Method', 'Status'], rows, `Total: ${formatCurrency(totalAmount)} | ${filtered.length} bookings`);
-    printContent(html, 'Report');
+    const rows = filtered.map(b => [
+      b.receiptNumber,
+      customerName(b.customerId),
+      plotInfo(b.plotId),
+      formatDate(b.bookingDate),
+      formatCurrency(b.bookingAmount),
+      b.paymentMethod,
+      b.status
+    ]);
+    const html = generateReportHTML(
+      company,
+      'Booking Report',
+      ['Receipt #', 'Customer', 'Plot', 'Date', 'Amount', 'Method', 'Status'],
+      rows,
+      `Total: ${formatCurrency(totalAmount)} | ${filtered.length} bookings`
+    );
+    printContent(html, 'Booking-Report');
   };
 
+  const handleExportCsv = () => {
+    const headers = ['Receipt #', 'Customer', 'Plot', 'Date', 'Amount', 'Method', 'Status'];
+    const rows = filtered.map(b => [
+      b.receiptNumber,
+      customerName(b.customerId),
+      plotInfo(b.plotId),
+      formatDate(b.bookingDate),
+      b.bookingAmount || 0,
+      b.paymentMethod,
+      b.status
+    ]);
+    exportRowsToCsv('Booking-Report', headers, rows);
+  };
+
+  const kpis = [
+    { label: 'Total Bookings', value: filtered.length, color: 'navy' as const, hint: 'Selected period' },
+    { label: 'Advance Collected', value: totalAmount, isCurrency: true, color: 'green' as const, hint: 'Total booking payments' },
+    { label: 'Confirmed', value: filtered.filter(b => b.status === 'confirmed').length, color: 'blue' as const, hint: 'Ready for sale' },
+    { label: 'Converted to Sale', value: filtered.filter(b => b.status === 'converted').length, color: 'green' as const, hint: 'Converted bookings' },
+  ];
+
   return (
-    <div>
-      <PageHeader
-        title="Booking Report"
-        icon={<BookOpen size={20} />}
-      />
-      <ReportFilters 
-        search={search}
-        onSearchChange={setSearch}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
-        actions={<>
-            
-            
-            
-            <select className="input-field w-32" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="">All Status</option>
-              {['pending','confirmed','converted','cancelled'].map(s => <option key={s} value={s}>{s}</option>)}
+    <ReportLayout
+      reportName="Booking Report"
+      title="Plot Bookings Report"
+      subtitle="Detailed overview of advance bookings, payments, and conversion status"
+      icon={<BookOpen size={18} />}
+      onPrint={handlePrint}
+      onExportCsv={handleExportCsv}
+      kpis={kpis}
+      loading={loading}
+      filterCard={
+        <ReportFilters
+          search={search}
+          onSearchChange={setSearch}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
+          searchPlaceholder="Search receipt #, customer, or plot..."
+          extraFilters={
+            <select
+              className="input-field w-36 text-xs"
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+            >
+              <option value="">All Statuses</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="converted">Converted</option>
+              <option value="pending">Pending</option>
+              <option value="cancelled">Cancelled</option>
             </select>
-            <button onClick={handlePrint} className="btn-primary"><Printer size={15} /> Print</button>
-            
-          </>}
-      />
-
-      <div className="grid grid-cols-3 gap-4 mb-5">
-        <div className="card text-center"><p className="text-xl font-bold text-primary">{filtered.length}</p><p className="text-xs text-slate-500 mt-1">Total Bookings</p></div>
-        <div className="card text-center"><p className="text-xl font-bold text-green-600">{formatCurrency(totalAmount)}</p><p className="text-xs text-slate-500 mt-1">Total Amount</p></div>
-        <div className="card text-center"><p className="text-xl font-bold text-amber-600">{filtered.filter(b => b.status === 'pending').length}</p><p className="text-xs text-slate-500 mt-1">Pending</p></div>
-      </div>
-
-      <div className="card overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>{['Receipt #', 'Customer', 'Plot', 'Date', 'Amount', 'Method', 'Status'].map(h => <th key={h} className="table-th">{h}</th>)}</tr>
-          </thead>
-          <tbody>
-            {filtered.map(b => (
-              <tr key={b.id} className="table-row">
-                <td className="table-td font-mono text-xs text-primary font-semibold">{b.receiptNumber}</td>
-                <td className="table-td font-medium">{customerName(b.customerId)}</td>
-                <td className="table-td">{plotInfo(b.plotId)}</td>
-                <td className="table-td">{formatDate(b.bookingDate)}</td>
-                <td className="table-td font-semibold">{formatCurrency(b.bookingAmount)}</td>
-                <td className="table-td">{b.paymentMethod}</td>
-                <td className="table-td"><StatusBadge status={b.status} size="sm" /></td>
+          }
+        />
+      }
+      footerContent={
+        <div className="flex justify-between items-center font-bold">
+          <span>Total Records: {filtered.length} bookings</span>
+          <span className="text-emerald-700">Total Booking Volume: {formatCurrency(totalAmount)}</span>
+        </div>
+      }
+    >
+      <table className="w-full text-left text-xs border-collapse">
+        <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600 sticky top-0 z-10">
+          <tr>
+            <th className="py-3 px-3">Receipt #</th>
+            <th className="py-3 px-3">Customer</th>
+            <th className="py-3 px-3">Plot</th>
+            <th className="py-3 px-3">Date</th>
+            <th className="py-3 px-3">Amount</th>
+            <th className="py-3 px-3">Method</th>
+            <th className="py-3 px-3">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.length === 0 ? (
+            <tr>
+              <td colSpan={7} className="py-12 text-center text-slate-400">
+                No bookings matched your filter criteria.
+              </td>
+            </tr>
+          ) : (
+            filtered.map(b => (
+              <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors">
+                <td className="py-2.5 px-3 font-mono font-bold text-primary">{b.receiptNumber}</td>
+                <td className="py-2.5 px-3 font-semibold text-slate-800">{customerName(b.customerId)}</td>
+                <td className="py-2.5 px-3 text-slate-700">{plotInfo(b.plotId)}</td>
+                <td className="py-2.5 px-3 text-slate-500">{formatDate(b.bookingDate || b.createdAt)}</td>
+                <td className="py-2.5 px-3 font-bold text-emerald-700">{formatCurrency(b.bookingAmount)}</td>
+                <td className="py-2.5 px-3 text-slate-600">{b.paymentMethod}</td>
+                <td className="py-2.5 px-3"><StatusBadge status={b.status} size="sm" /></td>
               </tr>
-            ))}
-            {filtered.length === 0 && <tr><td colSpan={7} className="table-td text-center py-10 text-slate-400">No bookings in selected range</td></tr>}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            ))
+          )}
+        </tbody>
+      </table>
+    </ReportLayout>
   );
 };
 
