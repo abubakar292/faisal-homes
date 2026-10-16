@@ -33,6 +33,7 @@ const NewBooking  = lazy(() => import('./pages/bookings/NewBooking'));
 const BookingList = lazy(() => import('./pages/bookings/BookingList'));
 
 // Sales
+const NewSale          = lazy(() => import('./pages/sales/NewSale'));
 const AssignPlot       = lazy(() => import('./pages/sales/AssignPlot'));
 const AssignedPlotsList = lazy(() => import('./pages/sales/AssignedPlotsList'));
 const PlotAgreement    = lazy(() => import('./pages/sales/PlotAgreement'));
@@ -135,7 +136,7 @@ const AppInner: React.FC = () => {
           <Route path="bookings/list"       element={<BookingList />} />
 
           {/* Sales */}
-          <Route path="sales/new"           element={<AssignPlot />} />
+          <Route path="sales/new"           element={<NewSale />} />
           <Route path="sales/list"          element={<AssignedPlotsList />} />
           <Route path="sales/agreement"     element={<PlotAgreement />} />
 
