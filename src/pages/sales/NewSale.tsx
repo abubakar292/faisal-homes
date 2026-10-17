@@ -126,9 +126,7 @@ export const NewSale: React.FC = () => {
   const [hasDraft, setHasDraft] = useState(false);
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
 
-  // ── Form State: Customer ──
-  const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing');
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  // ── Form State: Customer (Only new customer details) ──
   const [newCustomer, setNewCustomer] = useState<CustomerFormData>(defaultCustomerFormData);
   const [nominee, setNominee] = useState<NomineeDetails>(defaultNomineeDetails);
   const [documents, setDocuments] = useState<CustomerDocuments>({});
@@ -169,7 +167,7 @@ export const NewSale: React.FC = () => {
   const [rows, setRows] = useState<InstallmentRow[]>([makeDefaultRow(36, 0)]);
 
   // ── Form State: Dealer ──
-  const [dealerMode, setDealerMode] = useState<'none' | 'existing' | 'new'>('none');
+  const [dealerMode, setDealerMode] = useState<'none' | 'existing' | 'new'>('existing');
   const [selectedDealerId, setSelectedDealerId] = useState('');
   const [newDealer, setNewDealer] = useState<DealerFormData>(defaultDealerFormData);
   const [dealerCommissionPercent, setDealerCommissionPercent] = useState<string | number>('');
@@ -232,29 +230,37 @@ export const NewSale: React.FC = () => {
     } catch {}
   }, []);
 
-  // GSAP Entrance animation
-  useLayoutEffect(() => {
-    if (initialLoading) return;
-    const ctx = gsap.context(() => {
-      gsap.from('.sale-section-card', {
-        opacity: 0,
-        y: 25,
-        stagger: 0.08,
-        duration: 0.45,
-        ease: 'power2.out',
-      });
-    });
-    return () => ctx.revert();
-  }, [initialLoading]);
-
   // Load from booking helper
   const handleLoadBooking = (bkId: string) => {
     const bk = bookings.find(b => b.id === bkId);
     if (!bk) return;
 
     setActiveBookingId(bk.id);
-    setSelectedCustomerId(bk.customerId);
-    setCustomerMode('existing');
+    const bkCustomer = customers.find(c => c.id === bk.customerId);
+    if (bkCustomer) {
+      setNewCustomer({
+        name: bkCustomer.name || '',
+        fatherName: bkCustomer.fatherName || '',
+        cnic: bkCustomer.cnic || '',
+        phone: bkCustomer.phone || '',
+        phone2: bkCustomer.phone2 || '',
+        email: bkCustomer.email || '',
+        whatsapp: bkCustomer.whatsapp || '',
+        address: bkCustomer.address || '',
+        city: bkCustomer.city || '',
+        profession: bkCustomer.profession || '',
+        monthlyIncome: bkCustomer.monthlyIncome ? String(bkCustomer.monthlyIncome) : '',
+        emergencyContact: bkCustomer.emergencyContact || '',
+        emergencyPhone: bkCustomer.emergencyPhone || '',
+        notes: bkCustomer.notes || '',
+      });
+      if (bkCustomer.nominee) {
+        setNominee(bkCustomer.nominee);
+      }
+      if (bkCustomer.documents) {
+        setDocuments(bkCustomer.documents);
+      }
+    }
     setSelectedPlotId(bk.plotId);
     setIsBookingLocked(true);
     setBookingEnabled(true);
@@ -524,8 +530,6 @@ export const NewSale: React.FC = () => {
 
     const timer = setTimeout(() => {
       const draft = {
-        customerMode,
-        selectedCustomerId,
         newCustomer,
         nominee,
         documents,
@@ -568,8 +572,6 @@ export const NewSale: React.FC = () => {
   }, [
     initialLoading,
     isSuccess,
-    customerMode,
-    selectedCustomerId,
     newCustomer,
     nominee,
     documents,
@@ -609,8 +611,6 @@ export const NewSale: React.FC = () => {
       const saved = sessionStorage.getItem(DRAFT_KEY);
       if (!saved) return;
       const d = JSON.parse(saved);
-      if (d.customerMode) setCustomerMode(d.customerMode);
-      if (d.selectedCustomerId) setSelectedCustomerId(d.selectedCustomerId);
       if (d.newCustomer) setNewCustomer(d.newCustomer);
       if (d.nominee) setNominee(d.nominee);
       if (d.documents) setDocuments(d.documents);
@@ -660,8 +660,6 @@ export const NewSale: React.FC = () => {
   };
 
   const handleResetForm = () => {
-    setCustomerMode('existing');
-    setSelectedCustomerId('');
     setNewCustomer(defaultCustomerFormData);
     setNominee(defaultNomineeDetails);
     setDocuments({});
@@ -688,7 +686,7 @@ export const NewSale: React.FC = () => {
     setPaymentPlanId('');
     setPaymentPlanName('');
     setRows([makeDefaultRow(36, 0)]);
-    setDealerMode('none');
+    setDealerMode('existing');
     setSelectedDealerId('');
     setNewDealer(defaultDealerFormData);
     setDealerCommissionPercent('');
@@ -706,10 +704,9 @@ export const NewSale: React.FC = () => {
 
   // Section status determinations
   const customerValid = useMemo(() => {
-    if (customerMode === 'existing') return !!selectedCustomerId;
     const errs = validateCustomer(newCustomer);
     return Object.keys(errs).length === 0;
-  }, [customerMode, selectedCustomerId, newCustomer]);
+  }, [newCustomer]);
 
   const plotPriceValid = useMemo(() => {
     return !!selectedPlotId && numTotalPrice > 0 && numDownPaymentAmount >= numBookingAmount;
@@ -780,9 +777,9 @@ export const NewSale: React.FC = () => {
   const validationChecklist: ValidationItem[] = [
     {
       sectionId: 'section-customer',
-      label: customerMode === 'existing' ? 'Customer Selected' : 'Customer Info Completed',
+      label: 'Customer Information',
       valid: customerValid,
-      message: customerValid ? undefined : 'Please select or enter customer details',
+      message: customerValid ? undefined : 'Please enter customer personal and contact details',
     },
     {
       sectionId: 'section-plot-price',
@@ -837,11 +834,7 @@ export const NewSale: React.FC = () => {
     setHasAttemptedSubmit(true);
     const errs: Record<string, string> = {};
 
-    if (customerMode === 'existing' && !selectedCustomerId) {
-      errs.customerId = 'Customer is required';
-    } else if (customerMode === 'new') {
-      Object.assign(errs, validateCustomer(newCustomer));
-    }
+    Object.assign(errs, validateCustomer(newCustomer));
 
     if (!selectedPlotId) errs.plotId = 'Plot is required';
     if (numTotalPrice <= 0) errs.totalPrice = 'Total price is required';
@@ -856,7 +849,7 @@ export const NewSale: React.FC = () => {
     if (Object.keys(errs).length > 0) {
       toast.error('Please fix errors in highlighted sections');
       // Shake animation on first invalid section
-      const firstSection = errs.customerId || errs.name ? 'section-customer' : 'section-plot-price';
+      const firstSection = errs.name || errs.cnic || errs.phone ? 'section-customer' : 'section-plot-price';
       scrollToSection(firstSection);
       gsap.fromTo(
         `#${firstSection}`,
@@ -871,10 +864,7 @@ export const NewSale: React.FC = () => {
       setSavingStage('Saving customer & booking...');
 
       const res = await saveBookingOnly({
-        customer:
-          customerMode === 'existing'
-            ? { existingId: selectedCustomerId }
-            : { newCustomer, nominee, documents },
+        customer: { newCustomer, nominee, documents },
         plotId: selectedPlotId,
         bookingDate,
         perMarlaRate: Number(perMarlaRate) || 0,
@@ -904,11 +894,7 @@ export const NewSale: React.FC = () => {
     setHasAttemptedSubmit(true);
     const errs: Record<string, string> = {};
 
-    if (customerMode === 'existing' && !selectedCustomerId) {
-      errs.customerId = 'Customer is required';
-    } else if (customerMode === 'new') {
-      Object.assign(errs, validateCustomer(newCustomer));
-    }
+    Object.assign(errs, validateCustomer(newCustomer));
 
     if (!selectedPlotId) errs.plotId = 'Plot is required';
     if (numTotalPrice <= 0) errs.totalPrice = 'Total price is required';
@@ -940,7 +926,7 @@ export const NewSale: React.FC = () => {
     if (Object.keys(errs).length > 0) {
       toast.error('Please complete all required fields and balance the plan');
       const firstSection =
-        errs.customerId || errs.name
+        errs.name || errs.cnic || errs.phone
           ? 'section-customer'
           : errs.plotId || errs.totalPrice
           ? 'section-plot-price'
@@ -961,10 +947,7 @@ export const NewSale: React.FC = () => {
       setSavingStage('Saving customer & dealer...');
 
       const res = await saveSale({
-        customer:
-          customerMode === 'existing'
-            ? { existingId: selectedCustomerId }
-            : { newCustomer, nominee, documents },
+        customer: { newCustomer, nominee, documents },
         plotId: selectedPlotId,
         existingBookingId: activeBookingId || undefined,
         booking: bookingEnabled
@@ -1022,11 +1005,8 @@ export const NewSale: React.FC = () => {
   // Print Handlers
   const handlePrintBookingReceipt = () => {
     if (!company) return toast.error('Company information not configured');
-    const cust =
-      customerMode === 'existing'
-        ? customers.find(c => c.id === selectedCustomerId)
-        : ({ ...newCustomer, customerId: 'NEW' } as unknown as Customer);
-    if (!cust || !selectedPlot) return toast.error('Customer or plot data missing');
+    const cust = { ...newCustomer, id: successResult?.customerId || 'CUST-NEW' } as unknown as Customer;
+    if (!cust.name || !selectedPlot) return toast.error('Customer name or plot data missing');
 
     const dummyBooking: Booking = {
       id: successResult?.bookingId || 'BK-1',
@@ -1052,11 +1032,8 @@ export const NewSale: React.FC = () => {
 
   const handlePrintAgreement = () => {
     if (!company) return toast.error('Company settings missing');
-    const cust =
-      customerMode === 'existing'
-        ? customers.find(c => c.id === selectedCustomerId)
-        : ({ ...newCustomer, id: successResult?.customerId || '' } as unknown as Customer);
-    if (!cust || !selectedPlot) return toast.error('Customer or plot data missing');
+    const cust = { ...newCustomer, id: successResult?.customerId || 'CUST-NEW' } as unknown as Customer;
+    if (!cust.name || !selectedPlot) return toast.error('Customer or plot data missing');
 
     const dummySale: Sale = {
       id: successResult?.saleId || 'SALE-1',
@@ -1104,11 +1081,8 @@ export const NewSale: React.FC = () => {
 
   const handlePrintSchedule = () => {
     if (!company) return toast.error('Company settings missing');
-    const cust =
-      customerMode === 'existing'
-        ? customers.find(c => c.id === selectedCustomerId)
-        : ({ ...newCustomer, id: successResult?.customerId || '' } as unknown as Customer);
-    if (!cust || !selectedPlot) return toast.error('Customer or plot data missing');
+    const cust = { ...newCustomer, id: successResult?.customerId || 'CUST-NEW' } as unknown as Customer;
+    if (!cust.name || !selectedPlot) return toast.error('Customer or plot data missing');
 
     const dummySale: Sale = {
       id: successResult?.saleId || 'SALE-1',
@@ -1179,7 +1153,7 @@ export const NewSale: React.FC = () => {
   const previewInstallments = useMemo(() => {
     return buildInstallments({
       saleId: 'preview-sale',
-      customerId: selectedCustomerId || 'preview-cust',
+      customerId: tempCustomerId || 'preview-cust',
       plotId: selectedPlotId || 'preview-plot',
       saleDate: new Date(),
       rows,
@@ -1201,7 +1175,7 @@ export const NewSale: React.FC = () => {
     onPossessionNotes,
     semiAnnualEnabled,
     semiAnnualAmount,
-    selectedCustomerId,
+    tempCustomerId,
     selectedPlotId,
   ]);
 
@@ -1209,11 +1183,7 @@ export const NewSale: React.FC = () => {
     return <PageLoading />;
   }
 
-  const selectedCustObj = customers.find(c => c.id === selectedCustomerId);
-  const selectedCustomerName =
-    customerMode === 'existing'
-      ? selectedCustObj?.name || ''
-      : newCustomer.name;
+  const selectedCustomerName = newCustomer.name || '';
 
   return (
     <div className="pb-32">
@@ -1291,11 +1261,6 @@ export const NewSale: React.FC = () => {
           >
             <CustomerSection
               customers={customers}
-              activeSales={activeSales}
-              customerMode={customerMode}
-              setCustomerMode={setCustomerMode}
-              selectedCustomerId={selectedCustomerId}
-              onSelectCustomerId={setSelectedCustomerId}
               newCustomer={newCustomer}
               onNewCustomerChange={(k, v) => setNewCustomer(c => ({ ...c, [k]: v }))}
               nominee={nominee}
@@ -1440,20 +1405,19 @@ export const NewSale: React.FC = () => {
             </SectionCard>
           )}
 
-          {/* Section 6: Review & Verification */}
+          {/* Section 6: Review & Finish */}
           <SectionCard
             id="section-review"
             number={isBookingMode ? 4 : 6}
-            title="Review & Summary Checklist"
+            title="Review & Finish"
             status="pending"
           >
             <ReviewSection
               customerSummary={{
                 name: selectedCustomerName,
-                cnic: customerMode === 'existing' ? selectedCustObj?.cnic || '' : newCustomer.cnic,
-                phone: customerMode === 'existing' ? selectedCustObj?.phone || '' : newCustomer.phone,
-                address: customerMode === 'existing' ? selectedCustObj?.address || '' : newCustomer.address,
-                isNew: customerMode === 'new',
+                cnic: newCustomer.cnic,
+                phone: newCustomer.phone,
+                address: newCustomer.address,
                 nomineeName: nominee.nomineeName,
                 nomineeRelation: nominee.nomineeRelation,
               }}
@@ -1506,6 +1470,10 @@ export const NewSale: React.FC = () => {
               validationChecklist={validationChecklist}
               onNavigateToSection={scrollToSection}
               mode={isBookingMode ? 'booking' : 'sale'}
+              onCompleteSale={handleCompleteSale}
+              onSaveBooking={handleSaveBooking}
+              isSaving={isSaving}
+              savingStage={savingStage}
             />
           </SectionCard>
         </main>

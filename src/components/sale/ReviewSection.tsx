@@ -1,5 +1,14 @@
 import React from 'react';
-import { Check, AlertCircle, Calendar, ArrowRight } from 'lucide-react';
+import {
+  Check,
+  AlertCircle,
+  Calendar,
+  ArrowRight,
+  CheckCircle,
+  Bookmark,
+  Loader2,
+  ShieldCheck,
+} from 'lucide-react';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import type { Installment } from '../../types';
 
@@ -16,7 +25,6 @@ interface ReviewSectionProps {
     cnic: string;
     phone: string;
     address: string;
-    isNew: boolean;
     nomineeName?: string;
     nomineeRelation?: string;
   };
@@ -65,6 +73,10 @@ interface ReviewSectionProps {
   validationChecklist: ValidationItem[];
   onNavigateToSection: (sectionId: string) => void;
   mode?: 'sale' | 'booking';
+  onCompleteSale?: () => void;
+  onSaveBooking?: () => void;
+  isSaving?: boolean;
+  savingStage?: string;
 }
 
 export const ReviewSection: React.FC<ReviewSectionProps> = ({
@@ -78,9 +90,14 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
   validationChecklist,
   onNavigateToSection,
   mode = 'sale',
+  onCompleteSale,
+  onSaveBooking,
+  isSaving = false,
+  savingStage = '',
 }) => {
   const visiblePreview = previewInstallments.slice(0, 6);
   const remainingCount = Math.max(0, previewInstallments.length - 6);
+  const allValid = validationChecklist.every(item => item.valid);
 
   return (
     <div className="space-y-6">
@@ -132,7 +149,7 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
               Customer Details
             </span>
             <span className="text-slate-400 font-medium">
-              {customerSummary.isNew ? 'New Customer' : 'Existing Customer'}
+              Registered Customer
             </span>
           </div>
           <div>
@@ -324,6 +341,92 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
           )}
         </div>
       )}
+
+      {/* Review & Finish Action Banner */}
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-[#1a3c6e] to-slate-900 text-white shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2 h-2 rounded-full bg-[#e7b861] animate-pulse" />
+              <span className="text-[11px] uppercase font-bold tracking-widest text-[#e7b861]">
+                Final Step · Review & Finish
+              </span>
+            </div>
+            <h3 className="text-lg font-bold text-white">
+              {mode === 'booking' ? 'Finalize & Confirm Advance Booking' : 'Finalize & Complete Sale'}
+            </h3>
+            <p className="text-xs text-slate-300 mt-0.5">
+              {allValid
+                ? 'All required details are verified. Click below to submit atomically and print paperwork.'
+                : 'Please review the highlighted items above before finalizing.'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+                allValid
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
+              }`}
+            >
+              {allValid ? <ShieldCheck size={15} /> : <AlertCircle size={15} />}
+              {allValid ? 'All Validations Passed' : 'Incomplete Sections'}
+            </span>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-white/10 flex flex-wrap items-center gap-3">
+          {mode === 'sale' ? (
+            <>
+              <button
+                type="button"
+                onClick={onCompleteSale}
+                disabled={isSaving}
+                className="btn text-xs sm:text-sm font-bold px-6 py-3 bg-[#e7b861] hover:bg-[#d6a54d] text-slate-900 rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    {savingStage || 'Completing Sale...'}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={16} /> Confirm & Complete Sale
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={onSaveBooking}
+                disabled={isSaving}
+                className="btn text-xs sm:text-sm font-semibold px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                <Bookmark size={15} /> Save as Booking Only
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onSaveBooking}
+              disabled={isSaving}
+              className="btn text-xs sm:text-sm font-bold px-6 py-3 bg-[#e7b861] hover:bg-[#d6a54d] text-slate-900 rounded-xl shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  {savingStage || 'Saving Booking...'}
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={16} /> Confirm & Save Booking
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
