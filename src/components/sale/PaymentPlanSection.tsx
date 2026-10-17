@@ -187,97 +187,102 @@ export const PaymentPlanSection: React.FC<PaymentPlanSectionProps> = ({
           </button>
         </div>
 
-        {/* Column Headers */}
-        <div className="grid grid-cols-12 gap-2 px-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          <div className="col-span-2">Months</div>
-          <div className="col-span-3">Frequency</div>
-          <div className="col-span-3">
-            {allMonthly ? 'Monthly Amount' : 'Amount / Installment'}
-          </div>
-          <div className="col-span-3">Row Total</div>
-          <div className="col-span-1" />
-        </div>
+        {/* Rows Table (responsive scroll wrapper) */}
+        <div className="overflow-x-auto pb-1">
+          <div className="min-w-[480px] space-y-2">
+            {/* Column Headers */}
+            <div className="grid grid-cols-12 gap-2 px-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <div className="col-span-2">Months</div>
+              <div className="col-span-3">Frequency</div>
+              <div className="col-span-3">
+                {allMonthly ? 'Monthly Amount' : 'Amount / Installment'}
+              </div>
+              <div className="col-span-3">Row Total</div>
+              <div className="col-span-1" />
+            </div>
 
-        {/* Rows List */}
-        <div className="space-y-2">
-          {rows.map((row, idx) => {
-            const interval = getRowInterval(row);
-            const count = getRowCount(row);
-            const misaligned = isRowMisaligned(row);
+            {/* Rows List */}
+            <div className="space-y-2">
+              {rows.map((row, idx) => {
+                const interval = getRowInterval(row);
+                const count = getRowCount(row);
+                const misaligned = isRowMisaligned(row);
 
-            return (
-              <div key={row.id} className="space-y-1">
-                <div className="grid grid-cols-12 gap-2 items-start">
-                  <div className="col-span-2">
-                    <input
-                      type="number"
-                      className={`input-field text-center ${misaligned ? 'input-error' : ''}`}
-                      value={row.months || ''}
-                      onChange={e => onUpdateRow(row.id, 'months', Number(e.target.value))}
-                      placeholder="12"
-                      min="1"
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <select
-                      className="input-field text-xs"
-                      value={interval}
-                      onChange={e => onUpdateRow(row.id, 'intervalMonths', Number(e.target.value))}
-                    >
-                      {INTERVAL_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-slate-500 mt-0.5 pl-1">
-                      = {count} {count === 1 ? 'installment' : 'installments'}
-                    </p>
-                  </div>
-                  <div className="col-span-3">
-                    <input
-                      type="number"
-                      className="input-field"
-                      value={row.monthlyAmount || ''}
-                      onChange={e => onUpdateRow(row.id, 'monthlyAmount', Number(e.target.value))}
-                      placeholder="e.g., 50000"
-                      min="0"
-                    />
-                    <p className="text-[10px] text-slate-500 mt-0.5 pl-1">
-                      {interval === 1 ? 'Per month' : `Every ${interval}m`}
-                    </p>
-                  </div>
-                  <div className="col-span-3">
-                    <input
-                      type="number"
-                      className="input-field font-semibold text-[#1a3c6e]"
-                      value={row.totalAmount || ''}
-                      onChange={e => onUpdateRow(row.id, 'totalAmount', Number(e.target.value))}
-                      min="0"
-                    />
-                  </div>
-                  <div className="col-span-1 flex justify-center pt-1.5">
-                    {rows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => onRemoveRow(row.id)}
-                        className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Remove row"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                return (
+                  <div key={row.id} className="space-y-1">
+                    <div className="grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          className={`input-field text-center ${misaligned ? 'input-error' : ''}`}
+                          value={row.months || ''}
+                          onChange={e => onUpdateRow(row.id, 'months', Number(e.target.value))}
+                          placeholder="12"
+                          min="1"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <select
+                          className="input-field text-xs"
+                          value={interval}
+                          onChange={e => onUpdateRow(row.id, 'intervalMonths', Number(e.target.value))}
+                        >
+                          {INTERVAL_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-slate-500 mt-0.5 pl-1">
+                          = {count} {count === 1 ? 'installment' : 'installments'}
+                        </p>
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          className="input-field"
+                          value={row.monthlyAmount || ''}
+                          onChange={e => onUpdateRow(row.id, 'monthlyAmount', Number(e.target.value))}
+                          placeholder="e.g., 50000"
+                          min="0"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-0.5 pl-1">
+                          {interval === 1 ? 'Per month' : `Every ${interval}m`}
+                        </p>
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          className="input-field font-semibold text-[#1a3c6e]"
+                          value={row.totalAmount || ''}
+                          onChange={e => onUpdateRow(row.id, 'totalAmount', Number(e.target.value))}
+                          min="0"
+                        />
+                      </div>
+                      <div className="col-span-1 flex justify-center pt-1.5">
+                        {rows.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => onRemoveRow(row.id)}
+                            className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Remove row"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {misaligned && (
+                      <p className="text-xs text-rose-600 font-medium flex items-center gap-1 pl-1">
+                        <AlertTriangle size={12} /> Months must be a multiple of {interval}
+                      </p>
                     )}
                   </div>
-                </div>
-
-                {misaligned && (
-                  <p className="text-xs text-rose-600 font-medium flex items-center gap-1 pl-1">
-                    <AlertTriangle size={12} /> Months must be a multiple of {interval}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -291,16 +296,16 @@ export const PaymentPlanSection: React.FC<PaymentPlanSectionProps> = ({
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-              <span>Installments Total: {formatCurrency(grandTotal)}</span>
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-700">
+              <span>Installments Total: <strong className="text-slate-900">{formatCurrency(grandTotal)}</strong></span>
               {semiAnnualTotal > 0 && (
-                <span className="text-slate-500">
-                  + Semi-Annual: {formatCurrency(semiAnnualTotal)}
+                <span className="text-slate-600">
+                  + Semi-Annual: <strong className="text-slate-900">{formatCurrency(semiAnnualTotal)}</strong>
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Required for Plan: <strong>{formatCurrency(remainingForInstallments)}</strong>
+            <p className="text-xs text-slate-600 mt-1">
+              Required for Plan: <strong className="text-slate-900">{formatCurrency(remainingForInstallments)}</strong>
             </p>
             <p
               className={`text-xs font-bold mt-1 ${
@@ -317,7 +322,7 @@ export const PaymentPlanSection: React.FC<PaymentPlanSectionProps> = ({
               Grand Total
             </span>
             <span
-              className={`text-xl font-extrabold ${
+              className={`text-2xl font-extrabold ${
                 planValid ? 'text-emerald-700' : 'text-amber-700'
               }`}
             >

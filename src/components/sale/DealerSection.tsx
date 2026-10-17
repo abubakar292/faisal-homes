@@ -1,5 +1,5 @@
 import React from 'react';
-import { Handshake, UserCheck, UserPlus, X, AlertCircle } from 'lucide-react';
+import { Handshake, UserCheck, UserPlus, X, Check, ShieldCheck } from 'lucide-react';
 import SearchableSelect from '../ui/SearchableSelect';
 import FormField from '../ui/FormField';
 import DealerFormFields from '../forms/DealerFormFields';
@@ -44,52 +44,119 @@ export const DealerSection: React.FC<DealerSectionProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* Dealer Selection Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-            Dealer & Commission Assignment
-          </h3>
-          <p className="text-xs text-slate-500">
-            Select an authorized dealer or register a new dealer to accrue commission
-          </p>
-        </div>
+      {/* Section Sub-Header */}
+      <div className="pb-2 border-b border-slate-100">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+          <Handshake size={15} className="text-[#1a3c6e]" /> Dealer & Commission Assignment
+        </h3>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Select an authorized dealer, register a new dealer for this sale, or process as a direct sale
+        </p>
+      </div>
 
-        <div className="flex p-1 bg-slate-100 rounded-xl w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setDealerMode('existing')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-              dealerMode === 'existing'
-                ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <UserCheck size={14} className="text-[#1a3c6e]" /> Select Dealer
-          </button>
-          <button
-            type="button"
-            onClick={() => setDealerMode('new')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-              dealerMode === 'new'
-                ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <UserPlus size={14} className="text-[#1a3c6e]" /> + Add New Dealer
-          </button>
-          <button
-            type="button"
-            onClick={() => setDealerMode('none')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-              dealerMode === 'none'
-                ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <X size={14} /> Direct (No Dealer)
-          </button>
-        </div>
+      {/* 3-Card Responsive Option Selector (Grid never overflows) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Card 1: Existing Dealer */}
+        <button
+          type="button"
+          onClick={() => setDealerMode('existing')}
+          className={`p-3.5 rounded-xl border text-left transition-all relative ${
+            dealerMode === 'existing'
+              ? 'border-[#1a3c6e] bg-blue-50/70 shadow-sm ring-1 ring-[#1a3c6e]'
+              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                dealerMode === 'existing'
+                  ? 'bg-[#1a3c6e] text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              <UserCheck size={15} />
+            </div>
+            {dealerMode === 'existing' ? (
+              <span className="w-2.5 h-2.5 rounded-full bg-[#1a3c6e]" />
+            ) : (
+              <span className="w-2.5 h-2.5 rounded-full border border-slate-300" />
+            )}
+          </div>
+          <div className={`text-xs font-bold ${dealerMode === 'existing' ? 'text-[#1a3c6e]' : 'text-slate-800'}`}>
+            Select Dealer
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            Registered agency / dealer
+          </div>
+        </button>
+
+        {/* Card 2: New Dealer */}
+        <button
+          type="button"
+          onClick={() => setDealerMode('new')}
+          className={`p-3.5 rounded-xl border text-left transition-all relative ${
+            dealerMode === 'new'
+              ? 'border-[#1a3c6e] bg-blue-50/70 shadow-sm ring-1 ring-[#1a3c6e]'
+              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                dealerMode === 'new'
+                  ? 'bg-[#1a3c6e] text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              <UserPlus size={15} />
+            </div>
+            {dealerMode === 'new' ? (
+              <span className="w-2.5 h-2.5 rounded-full bg-[#1a3c6e]" />
+            ) : (
+              <span className="w-2.5 h-2.5 rounded-full border border-slate-300" />
+            )}
+          </div>
+          <div className={`text-xs font-bold ${dealerMode === 'new' ? 'text-[#1a3c6e]' : 'text-slate-800'}`}>
+            + Add New Dealer
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            Register for this sale
+          </div>
+        </button>
+
+        {/* Card 3: Direct Sale (No Dealer) */}
+        <button
+          type="button"
+          onClick={() => setDealerMode('none')}
+          className={`p-3.5 rounded-xl border text-left transition-all relative ${
+            dealerMode === 'none'
+              ? 'border-emerald-600 bg-emerald-50/70 shadow-sm ring-1 ring-emerald-600'
+              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                dealerMode === 'none'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              <X size={15} />
+            </div>
+            {dealerMode === 'none' ? (
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+            ) : (
+              <span className="w-2.5 h-2.5 rounded-full border border-slate-300" />
+            )}
+          </div>
+          <div className={`text-xs font-bold ${dealerMode === 'none' ? 'text-emerald-900' : 'text-slate-800'}`}>
+            Direct (No Dealer)
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            Direct sale · 0% commission
+          </div>
+        </button>
       </div>
 
       {/* Mode: Existing Dealer */}
@@ -157,10 +224,14 @@ export const DealerSection: React.FC<DealerSectionProps> = ({
       {/* Mode: None (Direct Sale) */}
       {dealerMode === 'none' && (
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-3">
-          <AlertCircle size={18} className="text-slate-400 flex-shrink-0 mt-0.5" />
-          <div className="text-xs text-slate-600">
-            <strong className="text-slate-800 block text-sm mb-0.5">Direct Sale (No Dealer Assigned)</strong>
-            No dealer commission will be recorded or disbursed for this transaction. If an authorized dealer assisted with this sale, click <strong>"Select Dealer"</strong> or <strong>"+ Add New Dealer"</strong> above.
+          <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <ShieldCheck size={18} />
+          </div>
+          <div className="text-xs text-slate-600 space-y-1">
+            <strong className="text-slate-900 block text-sm">Direct Customer Sale Confirmed</strong>
+            <p>
+              No dealer commission will be recorded or disbursed for this transaction. If an authorized dealer assisted with this sale, click <strong>"Select Dealer"</strong> or <strong>"+ Add New Dealer"</strong> above to link them.
+            </p>
           </div>
         </div>
       )}
@@ -178,20 +249,39 @@ export const DealerSection: React.FC<DealerSectionProps> = ({
               hint="Percentage of final price"
               error={errors.dealerCommissionPercent}
             >
-              <div className="relative">
-                <input
-                  type="number"
-                  className="input-field pr-8 font-semibold text-slate-900"
-                  value={commissionPercent}
-                  onChange={e => onCommissionPercentChange(e.target.value)}
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="2"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
-                  %
-                </span>
+              <div className="space-y-1.5">
+                <div className="relative">
+                  <input
+                    type="number"
+                    className="input-field pr-8 font-semibold text-slate-900"
+                    value={commissionPercent}
+                    onChange={e => onCommissionPercentChange(e.target.value)}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="2"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
+                    %
+                  </span>
+                </div>
+                {/* Quick preset chips */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[1, 1.5, 2, 2.5, 3].map(pct => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => onCommissionPercentChange(pct)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                        Number(commissionPercent) === pct
+                          ? 'bg-[#1a3c6e] text-white'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
               </div>
             </FormField>
 

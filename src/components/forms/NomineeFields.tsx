@@ -77,14 +77,16 @@ export const NomineeFields: React.FC<NomineeFieldsProps> = ({
             placeholder="03XX-XXXXXXX"
           />
         </FormField>
-        <FormField label="Nominee Address" error={errors.nomineeAddress}>
-          <input
-            className="input-field"
-            value={nominee.nomineeAddress}
-            onChange={handleTextChange('nomineeAddress')}
-            placeholder="Nominee address"
-          />
-        </FormField>
+        <div className="sm:col-span-2">
+          <FormField label="Nominee Address" error={errors.nomineeAddress}>
+            <input
+              className="input-field"
+              value={nominee.nomineeAddress}
+              onChange={handleTextChange('nomineeAddress')}
+              placeholder="Nominee address"
+            />
+          </FormField>
+        </div>
       </div>
     </div>
   );
