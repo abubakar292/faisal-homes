@@ -194,7 +194,7 @@ const CustomerLedger: React.FC = () => {
                 <span className="opacity-80">S/O</span> {customer.fatherName || '—'} &nbsp;&bull;&nbsp; 
                 <span className="font-mono text-xs opacity-75">{customer.customerId}</span>
               </p>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-3 text-sm text-blue-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1 mt-3 text-sm text-blue-100">
                 <p>CNIC: <span className="font-medium text-white">{customer.cnic}</span></p>
                 <p>Phone: <a href={`tel:${customer.phone}`} className="font-medium text-white hover:underline">{customer.phone}</a></p>
                 <p>City: <span className="font-medium text-white">{customer.city || '—'}</span></p>
@@ -224,7 +224,7 @@ const CustomerLedger: React.FC = () => {
 
       {/* 3. Scope Chips */}
       {activeSales.length > 1 && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 max-w-full">
           <button onClick={() => setScope('all')} className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors ${scope === 'all' ? 'bg-primary text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
             All Plots
           </button>
@@ -319,7 +319,7 @@ const CustomerLedger: React.FC = () => {
                 <p className="text-xs font-bold mt-1 text-slate-600">{formatDate(sb.saleDate)}</p>
               </div>
             </div>
-            <div className="p-4 grid grid-cols-2 gap-4 text-sm flex-1">
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm flex-1">
               <div>
                 <p className="text-xs text-slate-500">Final Price</p>
                 <p className="font-bold">{formatCurrency(sb.finalPrice)}</p>
@@ -349,7 +349,7 @@ const CustomerLedger: React.FC = () => {
 
       {/* 7. Tabs for Installments vs Statement */}
       <div className="card p-0 overflow-hidden">
-        <div className="flex border-b border-slate-200 bg-slate-50">
+        <div className="flex border-b border-slate-200 bg-slate-50 overflow-x-auto">
           <button 
             onClick={() => setActiveTab('installments')} 
             className={`flex-1 py-3 font-bold text-sm transition-colors ${activeTab === 'installments' ? 'bg-white text-primary border-b-2 border-primary' : 'text-slate-500 hover:text-slate-700'}`}

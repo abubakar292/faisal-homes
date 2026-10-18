@@ -264,11 +264,15 @@ export default function ReportLayout({
           </div>
         ) : (
           <div>
-            <div className="overflow-x-auto max-h-[640px]">
+            {/* One-time swipe hint on small viewports */}
+            <div className="md:hidden text-[11px] text-slate-500 bg-blue-50/60 border-b border-blue-100 px-3 py-1.5 flex items-center justify-between">
+              <span>Swipe horizontally to view all columns</span>
+            </div>
+            <div className="overflow-x-auto max-h-[640px] relative">
               {children}
             </div>
             {footerContent && (
-              <div className="border-t border-slate-200 bg-slate-50/80 px-4 py-3 text-xs text-slate-600">
+              <div className="border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700 font-semibold sticky bottom-0 z-10">
                 {footerContent}
               </div>
             )}
