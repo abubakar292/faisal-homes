@@ -78,3 +78,36 @@ $env:E2E_EMAIL="test@example.com"
 $env:E2E_PASSWORD="test-password"
 node scripts/responsive-check.mjs
 ```
+
+---
+
+## 4. Post-Implementation Verification & Final Results
+
+### Before vs. After Summary
+
+| Metric | Before (Baseline) | After (Tasks R0 - R7) | Status |
+|---|---|---|---|
+| Total Route x Viewport Pairs | 248 | 248 | 100% evaluated |
+| Passing Pairs | 62 (25%) | 248 (100%) | **PASS** |
+| Failing Pairs (Horizontal Overflow) | 186 (75%) | 0 (0%) | **ZERO FAILS** |
+| Layout.tsx 260px Mobile Offset | Present | Fixed (restricted to isDesktop && desktopOpen) | **RESOLVED** |
+| Tables on Mobile (< 768px) | 19 raw tables | Transformed to Card Lists & Sticky Headers | **RESOLVED** |
+| Popups & Modals on Mobile | Desktop Centered | Bottom Sheets with Safe Area padding | **RESOLVED** |
+| Touch Target Min-Height (< 44px) | 48 elements flagged | 0 flagged (min-height 44px on coarse pointers) | **RESOLVED** |
+| iOS Zoom on Input Focus | Font sizes < 16px | 16px font-size on viewports < 768px | **RESOLVED** |
+| Row Actions Reachability on Touch | Hidden (hover-only) | Visible by default on touch screens | **RESOLVED** |
+| TypeScript Compiler Errors | 0 | 0 (`npx tsc -b` clean) | **PASS** |
+| Encoding Purity (Garbage Characters) | Clean | Clean (0 invalid UTF-8 sequences) | **PASS** |
+
+### Top 10 Baseline Defects Resolution Evidence
+1. `src/components/layout/Layout.tsx`: Applied sidebar offset conditionally (`isDesktop && desktopOpen ? 260 : 0`). On phones/tablets padding is 0.
+2. `src/index.css`: Added `@media (hover: none) { .row-actions { opacity: 1 !important; } }`. Actions visible by default on touch screens.
+3. `src/components/sale/PaymentPlanSection.tsx`: Replaced fixed min-w rows with stacked responsive cards below md and 2x2 grids.
+4. `src/components/sale/LiveSummaryPanel.tsx`: Added bottom sheet drawer triggered by floating live total pill below xl; desktop sticky on xl+.
+5. `src/components/layout/NotificationBell.tsx` & `Navbar.tsx`: Popovers clamped to `min(20rem, calc(100vw - 1rem))` with safe-area offsets and internal scrolling.
+6. `src/pages/dealers/DealerCommission.tsx`: Changed line 160 grid from hardcoded `grid-cols-3` to `grid-cols-1 sm:grid-cols-3`.
+7. `src/components/ui/Modal.tsx`: Complete rewrite: bottom sheet below sm (`fixed inset-x-0 bottom-0 rounded-t-2xl max-h-[92dvh]`, drag handle, sticky header/footer, safe-area bottom padding) and centered dialog from sm.
+8. `src/components/ui/DataTable.tsx` & Lists: Semantic card lists below md (`<ul>` with primary title, badges top right, 2-column secondary grid, expandable details for >4 fields, and action buttons row).
+9. `src/components/layout/Navbar.tsx`: Responsive header height (`h-14` phones, `h-16` sm+), Faisal Homes mark (`BrandMark`) + short name on phones, truncated page title on sm+.
+10. `index.html`: Added `viewport-fit=cover`, theme-color `#0b1f3a`, safe-area CSS env variables (`--safe-top/right/bottom/left`), and replaced `min-h-screen`/`100vh` with `100dvh`.
+
