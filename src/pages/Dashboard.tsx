@@ -330,8 +330,30 @@ const Dashboard: React.FC = () => {
         {recentPayments.length === 0 ? (
           <div className="text-center py-10 text-slate-400 text-sm">No payments recorded yet</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <>
+            {/* Mobile Card List (< md) */}
+            <div className="md:hidden space-y-3">
+              {recentPayments.map(p => (
+                <div key={p.id} className="p-3 bg-slate-50 rounded-xl space-y-2 border border-slate-100">
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono text-xs text-primary font-bold">{p.receiptNumber || 'Receipt'}</span>
+                    <span className="font-bold text-sm text-green-700">{formatCurrency(p.amountPaid)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs text-slate-600">
+                    <span className="font-medium text-slate-800">{customerName(p.customerId)}</span>
+                    <span>{plotInfo(p.plotId)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1 border-t border-slate-200/60">
+                    <span>Inst #{p.installmentNumber} - {formatDate(p.paymentDate)}</span>
+                    <StatusBadge status={p.paymentMethod || 'cash'} size="sm" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
               <thead>
                 <tr>
                   {['Receipt #', 'Customer', 'Plot', 'Inst #', 'Amount', 'Date', 'Method'].map(h => (
@@ -364,6 +386,7 @@ const Dashboard: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
       </div>
@@ -371,16 +394,16 @@ const Dashboard: React.FC = () => {
 
       {activeTab === 'monthly' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between card bg-slate-50">
-            <h3 className="font-bold text-primary text-lg flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 card bg-slate-50">
+            <h3 className="font-bold text-primary text-base sm:text-lg flex items-center gap-2">
               <Calendar size={20} />
               This Month's Expected Collection
             </h3>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between sm:justify-end gap-4">
               <button onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))} className="btn-icon">
                 <ChevronLeft size={20} />
               </button>
-              <span className="font-extrabold text-xl w-40 text-center text-slate-800">
+              <span className="font-extrabold text-base sm:text-xl w-36 sm:w-40 text-center text-slate-800">
                 {format(selectedMonth, 'MMMM yyyy')}
               </span>
               <button onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))} className="btn-icon">

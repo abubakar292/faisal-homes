@@ -113,16 +113,18 @@ const PlotMap: React.FC = () => {
           ))}
         </div>
         <div className="flex-1" />
-        <select className="input-field w-36" value={filterBlock} onChange={e => setFilterBlock(e.target.value)}>
-          <option value="">All Blocks</option>
-          {blocks.map(b => <option key={b}>{b}</option>)}
-        </select>
-        <select className="input-field w-36" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="">All Status</option>
-          {['available','booked','sold','cancelled'].map(s =>
-            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-          )}
-        </select>
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
+          <select className="input-field w-full sm:w-36" value={filterBlock} onChange={e => setFilterBlock(e.target.value)}>
+            <option value="">All Blocks</option>
+            {blocks.map(b => <option key={b}>{b}</option>)}
+          </select>
+          <select className="input-field w-full sm:w-36" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="">All Status</option>
+            {['available','booked','sold','cancelled'].map(s =>
+              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            )}
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -138,7 +140,7 @@ const PlotMap: React.FC = () => {
                 <button
                   key={plot.id}
                   onClick={() => setSelected(plot)}
-                  className={`border rounded-lg px-3 py-2 text-xs font-semibold transition-all cursor-pointer min-w-[70px] ${statusColors[plot.status] || 'bg-slate-100 border-slate-300 text-slate-600'}`}
+                  className={`border rounded-lg px-3 py-2 text-xs font-semibold transition-all cursor-pointer min-w-[70px] min-h-[44px] flex flex-col justify-center items-center ${statusColors[plot.status] || 'bg-slate-100 border-slate-300 text-slate-600'}`}
                 >
                   <div>{plot.plotNumber}</div>
                   <div className="font-normal opacity-75">{plot.size}{plot.sizeUnit[0]}</div>

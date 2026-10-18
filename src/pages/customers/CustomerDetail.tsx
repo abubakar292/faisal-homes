@@ -52,7 +52,7 @@ const CustomerDetail: React.FC = () => {
         subtitle={customer.customerId ? `ID: ${customer.customerId} · ${customer.cnic}` : customer.cnic}
         icon={<Users size={20} />}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={() => navigate(-1)} className="btn btn-secondary btn-sm">
               <ArrowLeft size={15} /> Back
             </button>

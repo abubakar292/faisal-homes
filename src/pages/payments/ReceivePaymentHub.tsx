@@ -30,7 +30,8 @@ export default function ReceivePaymentHub() {
       />
 
       {/* Segmented control */}
-      <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 gap-1 text-xs font-semibold shadow-inner">
+      <div className="flex max-w-full overflow-x-auto no-scrollbar pb-1">
+        <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 gap-1 text-xs font-semibold shadow-inner flex-nowrap shrink-0">
         <button
           onClick={() => handleTabChange('installment')}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all ${
@@ -69,6 +70,7 @@ export default function ReceivePaymentHub() {
           <BookMarked size={14} className={activeType === 'possession' ? 'text-primary' : 'text-slate-400'} />
           On Possession
         </button>
+        </div>
       </div>
 
       {/* Render selected view */}

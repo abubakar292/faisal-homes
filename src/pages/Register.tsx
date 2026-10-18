@@ -145,9 +145,9 @@ export default function Register() {
       {/* Right Panel - Form */}
       <div 
         ref={rightPanelRef}
-        className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12"
+        className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8 lg:p-12"
       >
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-slate-100">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5 sm:p-8 border border-slate-100">
           <div className="lg:hidden mb-8 flex justify-center">
              <div className="p-3 bg-[#1a3c6e] rounded-2xl">
                <Logo size={40} variant="dark" />

@@ -48,7 +48,7 @@ const TermsAndConditions: React.FC = () => {
           </button>
         </div>
 
-        <div className="p-8 border border-slate-200 rounded-xl bg-white min-h-[400px]">
+        <div className="p-4 sm:p-8 border border-slate-200 rounded-xl bg-white min-h-[400px]">
           <h1 className="text-2xl font-bold text-center text-slate-800 mb-2">
             {company?.name || 'Company Name'}
           </h1>

@@ -228,7 +228,7 @@ const PaymentPlans: React.FC = () => {
               placeholder='e.g., "3 Year Easy Installments"'
             />
           </FormField>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField label="Duration">
               <input className="input-field" type="number" value={form.duration} onChange={set('duration')} min="1" />
             </FormField>
