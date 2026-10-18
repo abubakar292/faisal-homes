@@ -118,7 +118,7 @@ export default function Register() {
   };
 
   return (
-    <div ref={containerRef} className="min-h-screen flex bg-slate-50 overflow-hidden">
+    <div ref={containerRef} className="min-h-[100dvh] flex bg-slate-50 overflow-hidden">
       {/* Left Panel - Branding */}
       <div 
         ref={leftPanelRef}

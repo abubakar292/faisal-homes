@@ -4,6 +4,13 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
 /* ─── Base ──────────────────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
@@ -20,9 +27,13 @@
     padding: 0;
   }
 
+  img, svg, video {
+    max-width: 100%;
+  }
+
   #root {
     width: 100%;
-    min-height: 100vh;
+    min-height: 100dvh;
     text-align: left;
     border: none;
     display: block;
@@ -155,8 +166,21 @@
     @apply transition-colors duration-100;
   }
   .table-row:hover { background: #eff6ff; }
-  .table-row:hover .row-actions { opacity: 1; }
-  .row-actions { @apply opacity-0 transition-opacity duration-150; }
+  .row-actions {
+    @apply transition-opacity duration-150;
+  }
+  @media (hover: none) {
+    .row-actions { opacity: 1 !important; }
+  }
+  @media (hover: hover) {
+    .row-actions { opacity: 0; }
+    .table-row:hover .row-actions { opacity: 1; }
+  }
+
+  .break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 
   /* ── Skeleton loader ── */
   .skeleton {
@@ -174,6 +198,22 @@
     background: linear-gradient(135deg, #e8a020, #f5c041);
   }
   .stat-icon svg { color: white; }
+
+  /* ── Touch targets & input ergonomics ── */
+  @media (pointer: coarse) {
+    .btn-primary, .btn-secondary, .btn-gold, .btn-danger, .btn-success, .btn-ghost, .btn-icon {
+      min-height: 44px;
+    }
+    .input-field {
+      min-height: 44px;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .input-field {
+      font-size: 16px;
+    }
+  }
 }
 
 /* ─── Keyframes ─────────────────────────────────────────────────────────────── */

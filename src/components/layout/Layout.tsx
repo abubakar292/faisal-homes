@@ -79,7 +79,7 @@ const Layout: React.FC = () => {
   }, [location.pathname, begin, end]);
 
   return (
-    <div className="min-h-screen bg-[#f0f4f8] flex flex-col relative overflow-x-hidden">
+    <div className="min-h-[100dvh] bg-[#f0f4f8] flex flex-col relative overflow-x-hidden">
       <Navbar onToggleSidebar={toggle} pageTitle={pageTitle} />
 
       {/* Desktop sidebar */}
@@ -128,7 +128,7 @@ const Layout: React.FC = () => {
 
       {/* Page content */}
       <motion.main
-        className="flex-1 pt-16 min-h-screen transition-none relative"
+        className="flex-1 pt-16 min-h-[100dvh] transition-none relative"
         animate={{ paddingLeft: desktopOpen ? SIDEBAR_W : 0 }}
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       >
