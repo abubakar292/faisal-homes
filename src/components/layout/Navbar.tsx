@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, LogOut, User, ChevronDown } from 'lucide-react';
+import { Menu, LogOut, User, ChevronDown, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 import BrandMark from '../brand/BrandMark';
+import { usePWAInstall } from '../../pwa';
 
 interface Props {
   onToggleSidebar: () => void;
@@ -14,6 +15,7 @@ interface Props {
 
 const Navbar: React.FC<Props> = ({ onToggleSidebar, pageTitle = 'Dashboard' }) => {
   const { appUser, currentUser, logout, isAdmin } = useAuth();
+  const { canInstall, promptInstall } = usePWAInstall();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,7 +87,19 @@ const Navbar: React.FC<Props> = ({ onToggleSidebar, pageTitle = 'Dashboard' }) =
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+        {/* PWA Install Button */}
+        {canInstall && (
+          <button
+            onClick={promptInstall}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#e7b861] text-[#0f2444] hover:bg-[#d49f3e] text-xs font-bold transition-all shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8a020]"
+            title="Install Faisal Homes App on your device"
+          >
+            <Download size={14} strokeWidth={2.5} />
+            <span className="hidden sm:inline">Install</span>
+          </button>
+        )}
+
         {/* Notification bell */}
         <NotificationBell />
 

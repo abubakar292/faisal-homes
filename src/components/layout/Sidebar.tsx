@@ -114,9 +114,13 @@ const nav: NavGroup[] = [
   },
 ];
 
-interface SidebarProps { collapsed?: boolean; onClose?: () => void; }
+interface SidebarProps {
+  collapsed?: boolean;
+  onClose?: () => void;
+  onExpand?: () => void;
+}
 
-const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose, onExpand }) => {
   const location = useLocation();
   const { isAdmin } = useAuth();
 
@@ -183,11 +187,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
     >
       {/* ── Logo Header ── */}
       <div
-        className="flex items-center justify-between px-4 h-14 sm:h-16 flex-shrink-0"
+        className={`flex items-center ${collapsed ? 'justify-center px-1' : 'justify-between px-4'} h-14 sm:h-16 flex-shrink-0`}
         style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <Logo size={32} />
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3 min-w-0'}`}>
+          <Logo size={collapsed ? 28 : 32} />
           {!collapsed && (
             <div className="min-w-0">
               <p className="text-white font-bold text-sm leading-tight truncate">Faisal Homes</p>
@@ -207,14 +211,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
       </div>
 
       {/* ── "+ New Sale" Accent Button ── */}
-      <div className={collapsed ? 'px-2 pt-3 pb-2 flex justify-center' : 'px-3 pt-3 pb-2'}>
+      <div className={collapsed ? 'px-0 pt-3 pb-2 flex justify-center' : 'px-3 pt-3 pb-2'}>
         <NavLink
           to="/sales/new"
           onClick={onClose}
           id="sidebar-new-sale-accent-btn"
           className={
             collapsed
-              ? 'w-10 h-10 flex items-center justify-center rounded-xl font-bold shadow-md transition-all duration-200 hover:scale-105 active:scale-95'
+              ? 'w-11 h-11 flex items-center justify-center rounded-xl font-bold shadow-md transition-all duration-200 hover:scale-105 active:scale-95'
               : 'w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl font-bold text-xs tracking-wide shadow-md transition-all duration-200 hover:brightness-105 active:scale-98'
           }
           style={{
@@ -230,7 +234,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
       </div>
 
       {/* ── Navigation List ── */}
-      <nav className="flex-1 py-1 px-2 space-y-0.5">
+      <nav className={`flex-1 py-1 ${collapsed ? 'px-2 flex flex-col items-center space-y-1.5' : 'px-2 space-y-0.5'}`}>
         {nav.map(item => {
           if (item.adminOnly && !isAdmin) return null;
 
@@ -241,9 +245,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
                 key={item.path}
                 to={item.path}
                 onClick={onClose}
+                title={item.label}
                 className={({ isActive }: { isActive: boolean }) =>
-                  `sidebar-link ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
+                  `sidebar-link ${collapsed ? 'justify-center px-0 w-11 h-11 rounded-xl' : ''} ${
+                    isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'
+                  }`
                 }
+                style={collapsed ? { borderLeft: 'none', paddingLeft: 0 } : undefined}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
                 {!collapsed && <span>{item.label}</span>}
@@ -256,13 +264,21 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
           const isActive = isGroupActive(item);
 
           return (
-            <div key={item.label}>
+            <div key={item.label} className={collapsed ? 'w-full flex justify-center' : ''}>
               <button
-                onClick={() => toggle(item.label)}
-                className={`sidebar-link w-full ${
+                onClick={() => {
+                  if (collapsed && onExpand) {
+                    onExpand();
+                    setOpen(item.label);
+                  } else {
+                    toggle(item.label);
+                  }
+                }}
+                title={item.label}
+                className={`sidebar-link ${collapsed ? 'justify-center px-0 w-11 h-11 rounded-xl' : 'w-full'} ${
                   isActive ? 'text-white font-semibold' : 'text-white/70 hover:text-white hover:bg-white/10'
                 }`}
-                style={{ borderLeft: '3px solid transparent' }}
+                style={collapsed ? { borderLeft: 'none', paddingLeft: 0 } : { borderLeft: '3px solid transparent' }}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
                 {!collapsed && (

@@ -7,7 +7,8 @@ import { useScrollLock } from '../../hooks/useScrollLock';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 
-const SIDEBAR_W = 260;
+const SIDEBAR_EXPANDED_W = 260;
+const SIDEBAR_COLLAPSED_W = 70;
 
 /* Derive a readable page title from pathname */
 const getTitle = (pathname: string): string => {
@@ -150,14 +151,17 @@ const Layout: React.FC = () => {
 
       {/* Desktop sidebar (fixed, visible from lg only) */}
       <motion.aside
-        className="fixed left-0 top-0 bottom-0 z-30 hidden lg:block"
+        className="fixed left-0 top-0 bottom-0 z-30 hidden lg:block overflow-hidden"
         initial={false}
-        animate={{ width: desktopOpen ? SIDEBAR_W : 0 }}
+        animate={{ width: desktopOpen ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W }}
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         aria-label="Desktop navigation"
       >
-        <div className="pt-16 h-full w-[260px]">
-          <Sidebar collapsed={!desktopOpen} />
+        <div
+          className="pt-16 h-full transition-[width] duration-250 ease-out"
+          style={{ width: desktopOpen ? `${SIDEBAR_EXPANDED_W}px` : `${SIDEBAR_COLLAPSED_W}px` }}
+        >
+          <Sidebar collapsed={!desktopOpen} onExpand={() => setDesktopOpen(true)} />
         </div>
       </motion.aside>
 
@@ -214,7 +218,7 @@ const Layout: React.FC = () => {
       {/* Page content */}
       <motion.main
         className="flex-1 pt-14 sm:pt-16 min-h-[100dvh] transition-none relative"
-        animate={{ paddingLeft: isDesktop && desktopOpen ? SIDEBAR_W : 0 }}
+        animate={{ paddingLeft: isDesktop ? (desktopOpen ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W) : 0 }}
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       >
         <RouteLoader />
