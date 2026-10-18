@@ -15,6 +15,7 @@ import { where } from 'firebase/firestore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generatePlotAgreement, generateInstallmentSchedule } from '../../utils/printUtils';
 import type { Sale, Customer, Plot, Installment, CompanySettings, Dealer } from '../../types';
+import { useScrollLock } from '../../hooks/useScrollLock';
 
 export default function SalesList() {
   const navigate = useNavigate();
@@ -40,6 +41,17 @@ export default function SalesList() {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+
+  useScrollLock(!!selectedSale);
+
+  useEffect(() => {
+    if (!selectedSale) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeDrawer();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSale]);
 
   // Load all data
   useEffect(() => {
@@ -495,10 +507,14 @@ export default function SalesList() {
           />
 
           {/* Drawer container */}
-          <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+          <div className="absolute inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
             <div
               ref={drawerRef}
-              className="w-screen max-w-xl bg-white shadow-2xl flex flex-col overflow-y-auto"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Sale details"
+              className="w-full sm:w-screen sm:max-w-md bg-white shadow-2xl flex flex-col overflow-y-auto"
+              style={{ paddingBottom: 'var(--safe-bottom)' }}
             >
               {/* Drawer Header */}
               <div

@@ -158,7 +158,7 @@ const PlotMap: React.FC = () => {
               <StatusBadge status={selected.status} />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
                 ['Block/Phase', selected.block],
                 ['Size', `${selected.size} ${selected.sizeUnit}`],
@@ -190,7 +190,7 @@ const PlotMap: React.FC = () => {
                       <User size={16} className="text-blue-600" />
                       Sold To
                     </h4>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <div className="text-xs text-slate-500">Name</div>
                         <div className="text-sm font-medium">{detailsCache[selected.id].customer?.name}</div>
@@ -218,7 +218,7 @@ const PlotMap: React.FC = () => {
                       Sale Details
                     </h4>
                     {detailsCache[selected.id].sale ? (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <div className="text-xs text-slate-500">Sale Number</div>
                           <div className="text-sm font-medium">{detailsCache[selected.id].sale?.saleNumber}</div>
@@ -237,7 +237,7 @@ const PlotMap: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                          <div>
                           <div className="text-xs text-slate-500">Booking Receipt</div>
                           <div className="text-sm font-medium">{detailsCache[selected.id].booking?.receiptNumber}</div>

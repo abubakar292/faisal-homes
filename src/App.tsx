@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-r
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useMediaQuery } from './hooks/useMediaQuery';
 
 import { SplashScreen, LoaderProvider, useLoader } from './components/brand';
 import { initMotionDebug } from './components/brand/motionDebug';
@@ -196,33 +197,46 @@ const AppInner: React.FC = () => {
   );
 };
 
+// ─── Responsive Toaster ───────────────────────────────────────────────────────
+const ResponsiveToaster: React.FC = () => {
+  const isSm = useMediaQuery('(min-width: 640px)');
+  return (
+    <Toaster
+      position={isSm ? 'top-right' : 'top-center'}
+      containerStyle={{
+        top: 'calc(0.75rem + var(--safe-top))',
+        maxWidth: 'calc(100vw - 2rem)',
+      }}
+      toastOptions={{
+        duration: 3500,
+        style: {
+          borderRadius: '12px',
+          fontSize: '13px',
+          fontFamily: 'Inter, sans-serif',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          maxWidth: 'calc(100vw - 2rem)',
+        },
+        success: {
+          style: { borderLeft: '4px solid #22c55e' },
+          iconTheme: { primary: '#22c55e', secondary: '#fff' },
+        },
+        error: {
+          style: { borderLeft: '4px solid #ef4444' },
+          iconTheme: { primary: '#ef4444', secondary: '#fff' },
+        },
+      }}
+    />
+  );
+};
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 const App: React.FC = () => (
   <BrowserRouter>
     <AuthProvider>
       <LoaderProvider>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 3500,
-          style: {
-            borderRadius:  '12px',
-            fontSize:      '13px',
-            fontFamily:    'Inter, sans-serif',
-            boxShadow:     '0 4px 16px rgba(0,0,0,0.12)',
-          },
-          success: {
-            style: { borderLeft: '4px solid #22c55e' },
-            iconTheme: { primary: '#22c55e', secondary: '#fff' },
-          },
-          error: {
-            style: { borderLeft: '4px solid #ef4444' },
-            iconTheme: { primary: '#ef4444', secondary: '#fff' },
-          },
-        }}
-      />
-      <AppInner />
-          </LoaderProvider>
+        <ResponsiveToaster />
+        <AppInner />
+      </LoaderProvider>
     </AuthProvider>
   </BrowserRouter>
 );

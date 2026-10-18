@@ -157,7 +157,7 @@ const DealerLedgerView: React.FC<LedgerProps> = ({ dealerName, dealerPhone, onBa
       />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
         {[
           { label: 'Total Commission Earned', value: formatCurrency(totalEarned), color: '#1a3c6e', bg: '#eff6ff' },
           { label: 'Total Received',           value: formatCurrency(totalPaid),   color: '#15803d', bg: '#dcfce7' },
