@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Bell, AlertCircle, Clock, DollarSign, ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCollection } from '../../firebase/firestore';
 import { formatCurrency, isInstallmentOverdue } from '../../utils/formatters';
@@ -19,10 +19,26 @@ interface Notification {
 
 const NotificationBell: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+
+  // Close on route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   const generateNotifications = useCallback(async () => {
     try {
@@ -161,7 +177,9 @@ const NotificationBell: React.FC = () => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-xl hover:bg-white/10 text-white transition-colors"
+        aria-label="Notifications"
+        aria-expanded={isOpen}
+        className="relative p-2 rounded-xl hover:bg-white/10 text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8a020]"
       >
         <Bell size={18} />
         {unreadCount > 0 && (
@@ -188,7 +206,7 @@ const NotificationBell: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 6, scale: 0.96 }}
               transition={{ duration: 0.15 }}
-              className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-100 z-50 overflow-hidden"
+              className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-1rem))] max-h-[calc(100dvh-5rem)] bg-white rounded-xl shadow-2xl border border-slate-100 z-50 overflow-hidden flex flex-col"
             >
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">

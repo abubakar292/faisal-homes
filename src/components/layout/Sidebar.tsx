@@ -7,7 +7,7 @@ import {
   Users, BookOpen, ClipboardList, CreditCard, Receipt,
   History, Handshake, DollarSign, BarChart2, Calendar,
   AlertCircle, Settings, ChevronDown, Database, Building2,
-  FileText, Plus
+  FileText, Plus, X
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -183,15 +183,26 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false, onClose }) => {
     >
       {/* ── Logo Header ── */}
       <div
-        className="flex items-center gap-3 px-4 h-16 flex-shrink-0"
+        className="flex items-center justify-between px-4 h-14 sm:h-16 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
       >
-        <Logo size={36} />
-        {!collapsed && (
-          <div className="min-w-0">
-            <p className="text-white font-bold text-sm leading-tight truncate">Faisal Homes</p>
-            <p className="text-white/40 text-[10px] truncate">Property Management</p>
-          </div>
+        <div className="flex items-center gap-3 min-w-0">
+          <Logo size={32} />
+          {!collapsed && (
+            <div className="min-w-0">
+              <p className="text-white font-bold text-sm leading-tight truncate">Faisal Homes</p>
+              <p className="text-white/40 text-[10px] truncate">Property Management</p>
+            </div>
+          )}
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close navigation menu"
+            className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 lg:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e8a020]"
+          >
+            <X size={18} />
+          </button>
         )}
       </div>
 
