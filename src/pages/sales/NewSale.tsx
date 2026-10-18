@@ -829,6 +829,59 @@ export const NewSale: React.FC = () => {
     }
   };
 
+  // Scroll-spy observer for section mini-nav
+  useEffect(() => {
+    const sectionIds = sectionNavItems.map(item => item.id);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.find(e => e.isIntersecting);
+        if (visible) {
+          setActiveSectionId(visible.target.id);
+        }
+      },
+      { rootMargin: '-20% 0px -70% 0px', threshold: 0 }
+    );
+
+    sectionIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [sectionNavItems]);
+
+  // VisualViewport keyboard tracking to lift action bar
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const handleResize = () => {
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardOffset(offset);
+    };
+    vv.addEventListener('resize', handleResize);
+    vv.addEventListener('scroll', handleResize);
+    return () => {
+      vv.removeEventListener('resize', handleResize);
+      vv.removeEventListener('scroll', handleResize);
+    };
+  }, []);
+
+  // Center input into view on focus
+  useEffect(() => {
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+        setTimeout(() => {
+          target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 300);
+      }
+    };
+    document.addEventListener('focusin', handleFocusIn);
+    return () => document.removeEventListener('focusin', handleFocusIn);
+  }, []);
+
   // ── Form Submissions ──
   const handleSaveBooking = async () => {
     setHasAttemptedSubmit(true);
@@ -1242,7 +1295,7 @@ export const NewSale: React.FC = () => {
       )}
 
       {/* Main 3-Column Desktop Layout */}
-      <div className="flex items-start gap-6">
+      <div className="flex flex-col xl:flex-row items-start gap-6">
         {/* Left Vertical Section Mini-Nav */}
         <SectionNav
           items={sectionNavItems}
@@ -1251,7 +1304,7 @@ export const NewSale: React.FC = () => {
         />
 
         {/* Center Sections Column */}
-        <main className="flex-1 min-w-0 space-y-6">
+        <main className="flex-1 min-w-0 w-full space-y-6">
           {/* Section 1: Customer */}
           <SectionCard
             id="section-customer"
@@ -1508,6 +1561,8 @@ export const NewSale: React.FC = () => {
           }
           grandTotal={planMath.grandTotal}
           isExact={planMath.isExact}
+          isRounding={planMath.isRounding}
+          isMismatch={planMath.isMismatch}
           difference={planMath.difference}
           dealerCommissionAmount={dealerCommissionAmount}
           dealerName={selectedDealer?.name || newDealer.name}
@@ -1518,6 +1573,10 @@ export const NewSale: React.FC = () => {
       {/* Sticky Bottom Action Bar */}
       <footer
         className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-2xl py-3 px-4 sm:px-8"
+        style={{
+          bottom: `${keyboardOffset}px`,
+          paddingBottom: 'calc(0.75rem + var(--safe-bottom))',
+        }}
         aria-label="Form Actions"
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">

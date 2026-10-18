@@ -78,7 +78,50 @@ const UsersManagement: React.FC = () => {
         icon={<Users size={20} />}
         actions={<button onClick={() => setShowModal(true)} className="btn-primary"><Plus size={16} /> Add User</button>}
       />
-      <div className="card">
+      {/* Mobile Card List (< md) */}
+      <div className="md:hidden space-y-3">
+        {users.map(user => (
+          <div key={user.id} className="card p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h4 className="font-bold text-slate-800 text-sm">{user.name}</h4>
+                <p className="text-xs text-slate-500 break-anywhere">{user.email}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${user.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-600'}`}>
+                  {user.role}
+                </span>
+                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${user.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {user.active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => toggleRole(user)}
+                className="text-xs px-3 py-1.5 min-h-[36px] bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-semibold"
+              >
+                Toggle Role
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteId(user.id)}
+                aria-label="Deactivate user"
+                className="p-2 min-h-[36px] min-w-[36px] flex items-center justify-center hover:bg-red-50 rounded-lg text-red-500"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+        {users.length === 0 && (
+          <div className="card text-center py-10 text-slate-400">No users found</div>
+        )}
+      </div>
+
+      {/* Desktop Table (>= md) */}
+      <div className="hidden md:block card overflow-x-auto">
         <table className="w-full">
           <thead className="bg-slate-50">
             <tr>{['Name', 'Email', 'Role', 'Status', 'Actions'].map(h => <th key={h} className="table-th">{h}</th>)}</tr>

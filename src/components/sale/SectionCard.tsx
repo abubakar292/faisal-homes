@@ -56,7 +56,7 @@ export const SectionCard: React.FC<SectionCardProps> = ({
     <section
       id={id}
       ref={cardRef}
-      className={`sale-section-card bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 sm:p-6 transition-all duration-200 hover:border-slate-300 ${className}`}
+      className={`sale-section-card bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-6 scroll-mt-20 sm:scroll-mt-24 transition-all duration-200 hover:border-slate-300 ${className}`}
     >
       <header
         className={`flex items-center justify-between gap-3 ${

@@ -406,6 +406,7 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
               <input
                 className="input-field font-semibold"
                 type="number"
+                inputMode="numeric"
                 value={amountPaid}
                 onChange={e => setAmountPaid(e.target.value)}
                 min="0"
@@ -466,7 +467,7 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
             />
           </FormField>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button type="submit" disabled={loading || isBlocked} className="btn btn-primary disabled:opacity-60">
               <Save size={16} /> {loading ? 'Processing...' : 'Record Payment'}
             </button>

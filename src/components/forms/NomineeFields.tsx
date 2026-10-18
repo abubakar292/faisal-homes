@@ -67,11 +67,16 @@ export const NomineeFields: React.FC<NomineeFieldsProps> = ({
             value={nominee.nomineeCnic}
             onChange={handleTextChange('nomineeCnic')}
             placeholder="35202-1234567-1"
+            inputMode="numeric"
+            autoComplete="off"
           />
         </FormField>
         <FormField label="Nominee Phone" error={errors.nomineePhone}>
           <input
             className="input-field"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
             value={nominee.nomineePhone}
             onChange={handleTextChange('nomineePhone')}
             placeholder="03XX-XXXXXXX"

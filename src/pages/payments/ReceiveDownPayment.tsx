@@ -282,10 +282,10 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
                 {[
                   ['Customer', selectedCustomer.name, '#0f172a'],
                   ['Plot', `${selectedPlot.plotNumber}, Block ${selectedPlot.block}`, '#0f172a'],
-                  ['Total Down Payment', `Rs. ${formatCurrency(selectedSale.downPaymentAmount || 0)}`, '#1a3c6e'],
-                  ['Booking Already Paid', `Rs. ${formatCurrency(selectedSale.bookingAmountPaid || 0)}`, '#64748b'],
-                  ['Previously Received (DP)', `Rs. ${formatCurrency(receivedSoFar)}`, '#16a34a'],
-                  ['Still Remaining (Max)', `Rs. ${formatCurrency(stillPending)}`, stillPending > 0 ? '#b91c1c' : '#16a34a'],
+                  ['Total Down Payment', formatCurrency(selectedSale.downPaymentAmount || 0), '#1a3c6e'],
+                  ['Booking Already Paid', formatCurrency(selectedSale.bookingAmountPaid || 0), '#64748b'],
+                  ['Previously Received (DP)', formatCurrency(receivedSoFar), '#16a34a'],
+                  ['Still Remaining (Max)', formatCurrency(stillPending), stillPending > 0 ? '#b91c1c' : '#16a34a'],
                 ].map(([label, value, color]) => (
                   <div key={label as string} className="flex justify-between items-center px-4 py-2.5">
                     <span className="text-slate-500">{label}</span>
@@ -300,13 +300,14 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
           {selectedSale && stillPending > 0 && (
             <>
               <FormField
-                label={`Amount Receiving (Rs.) — Max: Rs. ${formatCurrency(stillPending)}`}
+                label={`Amount Receiving (Rs.) - Max: ${formatCurrency(stillPending)}`}
                 required
-                error={amountExceedsMax ? `Cannot exceed Rs. ${formatCurrency(stillPending)}` : undefined}
+                error={amountExceedsMax ? `Cannot exceed ${formatCurrency(stillPending)}` : undefined}
               >
                 <input
                   className={`input-field font-semibold ${amountExceedsMax ? 'border-red-400' : ''}`}
                   type="number"
+                  inputMode="numeric"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                   min="1"
@@ -357,7 +358,7 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
             </>
           )}
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button
               type="submit"
               disabled={loading || !selectedSale || stillPending === 0 || amountExceedsMax}

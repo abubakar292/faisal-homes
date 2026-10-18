@@ -63,6 +63,8 @@ export const CustomerFormFields: React.FC<CustomerFormFieldsProps> = ({
               value={form.cnic}
               onChange={handleTextChange('cnic')}
               placeholder="35202-1234567-1"
+              inputMode="numeric"
+              autoComplete="off"
             />
           </FormField>
           <FormField label="Profession">
@@ -77,6 +79,7 @@ export const CustomerFormFields: React.FC<CustomerFormFieldsProps> = ({
             <input
               className="input-field"
               type="number"
+              inputMode="numeric"
               value={form.monthlyIncome}
               onChange={handleTextChange('monthlyIncome')}
               placeholder="e.g., 100000"
@@ -97,6 +100,9 @@ export const CustomerFormFields: React.FC<CustomerFormFieldsProps> = ({
           >
             <input
               className={`input-field ${errors.phone ? 'input-error' : ''}`}
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               value={form.phone}
               onChange={handleTextChange('phone')}
               placeholder="0300-1234567"
@@ -105,6 +111,8 @@ export const CustomerFormFields: React.FC<CustomerFormFieldsProps> = ({
           <FormField label="Phone 2 (Optional)">
             <input
               className="input-field"
+              type="tel"
+              inputMode="tel"
               value={form.phone2}
               onChange={handleTextChange('phone2')}
               placeholder="0311-1234567"
@@ -113,6 +121,8 @@ export const CustomerFormFields: React.FC<CustomerFormFieldsProps> = ({
           <FormField label="WhatsApp">
             <input
               className="input-field"
+              type="tel"
+              inputMode="tel"
               value={form.whatsapp}
               onChange={handleTextChange('whatsapp')}
               placeholder="03XX-XXXXXXX"
@@ -182,6 +192,8 @@ export const CustomerFormFields: React.FC<CustomerFormFieldsProps> = ({
               <FormField label="Emergency Phone">
                 <input
                   className="input-field"
+                  type="tel"
+                  inputMode="tel"
                   value={form.emergencyPhone}
                   onChange={handleTextChange('emergencyPhone')}
                   placeholder="03XX-XXXXXXX"

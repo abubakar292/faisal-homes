@@ -45,11 +45,16 @@ export const DealerFormFields: React.FC<DealerFormFieldsProps> = ({
             value={form.cnic}
             onChange={handleTextChange('cnic')}
             placeholder="35202-1234567-1"
+            inputMode="numeric"
+            autoComplete="off"
           />
         </FormField>
         <FormField label="Phone" required error={errors.phone}>
           <input
             className={`input-field ${errors.phone ? 'input-error' : ''}`}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
             value={form.phone}
             onChange={handleTextChange('phone')}
             placeholder="03XX-XXXXXXX"
@@ -58,6 +63,8 @@ export const DealerFormFields: React.FC<DealerFormFieldsProps> = ({
         <FormField label="WhatsApp">
           <input
             className="input-field"
+            type="tel"
+            inputMode="tel"
             value={form.whatsapp}
             onChange={handleTextChange('whatsapp')}
             placeholder="03XX-XXXXXXX"
