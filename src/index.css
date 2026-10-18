@@ -266,6 +266,21 @@
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 9999px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
 
+/* ─── Accessibility & Motion Polish ────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #1a3c6e;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ─── Print ─────────────────────────────────────────────────────────────────── */
 
 /* On screen: hide the print area completely */
