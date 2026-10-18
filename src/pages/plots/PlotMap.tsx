@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Map, User, FileText } from 'lucide-react';
+import { Map as MapIcon, User, FileText, Box, Compass, Flag } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { BrandLoader } from '../../components/brand';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
@@ -9,6 +10,10 @@ import { where } from 'firebase/firestore';
 import { formatCurrency } from '../../utils/formatters';
 import type { Plot, Sale, Booking, Customer } from '../../types';
 import gsap from 'gsap';
+import { usePlotRects } from '../../features/plotMap3d/usePlotRects';
+import { useSoldCelebrations } from '../../features/plotMap3d/useSoldCelebrations';
+
+const HouseOverlay = React.lazy(() => import('../../features/plotMap3d/HouseOverlay'));
 
 interface PlotDetails {
   loading: boolean;
@@ -32,12 +37,70 @@ const PlotMap: React.FC = () => {
   const [selected, setSelected] = useState<Plot | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 3D houses toggle (persisted in localStorage, default on)
+  const [enable3d, setEnable3d] = useState<boolean>(() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('faisal_plot_map_3d') : null;
+    if (saved !== null) return saved === 'true';
+    if (typeof window !== 'undefined' && window.innerWidth < 640) {
+      return true;
+    }
+    return true;
+  });
+
+  const [isTilt, setIsTilt] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const plotElementsRef = useRef<Map<string, HTMLElement>>(new Map());
+
+  const [searchParams] = useSearchParams();
+
+  const toggle3d = () => {
+    setEnable3d((prev) => {
+      const next = !prev;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('faisal_plot_map_3d', String(next));
+      }
+      return next;
+    });
+  };
+
   const [detailsCache, setDetailsCache] = useState<Record<string, PlotDetails>>({});
   const detailsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (searchParams.get('demo3d') === '1') {
+      const demoPlots: Plot[] = [
+        { id: 'demo-1', plotNumber: 'A-101', block: 'A', size: 3, sizeUnit: 'Marla', category: 'General', status: 'sold', location: 'Phase 1', description: 'Standard plot', createdAt: new Date() },
+        { id: 'demo-2', plotNumber: 'A-102', block: 'A', size: 5, sizeUnit: 'Marla', category: 'General', status: 'sold', location: 'Phase 1', description: 'Standard plot', createdAt: new Date() },
+        { id: 'demo-3', plotNumber: 'A-103', block: 'A', size: 7, sizeUnit: 'Marla', category: 'General', status: 'sold', location: 'Phase 1', description: 'Standard plot', createdAt: new Date() },
+        { id: 'demo-4', plotNumber: 'A-104', block: 'A', size: 10, sizeUnit: 'Marla', category: 'Corner', status: 'sold', location: 'Phase 1', description: 'Corner plot', createdAt: new Date() },
+        { id: 'demo-5', plotNumber: 'A-105', block: 'A', size: 1, sizeUnit: 'Kanal', category: 'Boulevard', status: 'sold', location: 'Phase 1', description: 'Boulevard plot', createdAt: new Date() },
+        { id: 'demo-6', plotNumber: 'B-201', block: 'B', size: 5, sizeUnit: 'Marla', category: 'General', status: 'available', location: 'Phase 1', description: 'Standard plot', createdAt: new Date() },
+        { id: 'demo-7', plotNumber: 'B-202', block: 'B', size: 5, sizeUnit: 'Marla', category: 'General', status: 'booked', location: 'Phase 1', description: 'Standard plot', createdAt: new Date() },
+      ];
+      setPlots(demoPlots);
+      setLoading(false);
+      return;
+    }
+
     getCollection<Plot>('plots').then(data => { setPlots(data); setLoading(false); });
-  }, []);
+  }, [searchParams]);
+
+  // Hook for 3D plot screen rectangles
+  const rectItems = usePlotRects({
+    plots,
+    containerRef,
+    plotElementsRef,
+    filterBlock,
+    filterStatus,
+    enabled: enable3d && !loading,
+  });
+
+  // Hook for celebration build animations & deep links
+  const { celebratingPlotIds, handleCelebrationEnd } = useSoldCelebrations({
+    plotElementsRef,
+    enabled: enable3d && !loading,
+  });
 
   const fetchData = async (pid: string) => {
     try {
@@ -100,7 +163,7 @@ const PlotMap: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title="Plot Map" subtitle="Visual overview of all plots" icon={<Map size={20} />} />
+      <PageHeader title="Plot Map" subtitle="Visual overview of all plots" icon={<MapIcon size={20} />} />
 
       {/* Legend + Filters */}
       <div className="card mb-5 flex flex-wrap items-center gap-4">
@@ -113,7 +176,37 @@ const PlotMap: React.FC = () => {
           ))}
         </div>
         <div className="flex-1" />
-        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {/* 3D Houses Toggle */}
+          <button
+            type="button"
+            onClick={toggle3d}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer ${
+              enable3d
+                ? 'bg-[#1a3c6e] text-white border-[#1a3c6e] shadow-sm'
+                : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+            }`}
+            title="Toggle 3D houses on sold plots"
+          >
+            <Box size={14} className={enable3d ? 'text-[#e7b861]' : 'text-slate-400'} />
+            <span>3D Houses</span>
+          </button>
+
+          {/* Tilt View Toggle (Desktop & Tablet) */}
+          <button
+            type="button"
+            onClick={() => setIsTilt((prev) => !prev)}
+            className={`hidden md:flex px-3 py-1.5 rounded-lg text-xs font-semibold items-center gap-1.5 transition-all border cursor-pointer ${
+              isTilt
+                ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+            }`}
+            title="Toggle oblique map tilt"
+          >
+            <Compass size={14} className={isTilt ? 'text-amber-200' : 'text-slate-400'} />
+            <span>Tilt View</span>
+          </button>
+
           <select className="input-field w-full sm:w-36" value={filterBlock} onChange={e => setFilterBlock(e.target.value)}>
             <option value="">All Blocks</option>
             {blocks.map(b => <option key={b}>{b}</option>)}
@@ -128,27 +221,64 @@ const PlotMap: React.FC = () => {
       </div>
 
       {loading ? (
-        <div className="card text-center py-16 text-slate-400">Loading map...</div>
+        <div className="card text-center py-16 flex justify-center items-center">
+          <BrandLoader size={56} />
+        </div>
       ) : Object.keys(grouped).length === 0 ? (
         <div className="card text-center py-16 text-slate-400">No plots to display</div>
       ) : (
-        Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([block, blockPlots]) => (
-          <div key={block} className="card mb-4">
-            <h3 className="font-semibold text-slate-700 mb-3">Block {block}</h3>
-            <div className="flex flex-wrap gap-2">
-              {blockPlots.sort((a, b) => a.plotNumber.localeCompare(b.plotNumber, undefined, { numeric: true })).map(plot => (
-                <button
-                  key={plot.id}
-                  onClick={() => setSelected(plot)}
-                  className={`border rounded-lg px-3 py-2 text-xs font-semibold transition-all cursor-pointer min-w-[70px] min-h-[44px] flex flex-col justify-center items-center ${statusColors[plot.status] || 'bg-slate-100 border-slate-300 text-slate-600'}`}
-                >
-                  <div>{plot.plotNumber}</div>
-                  <div className="font-normal opacity-75">{plot.size}{plot.sizeUnit[0]}</div>
-                </button>
-              ))}
+        <div
+          ref={containerRef}
+          className="relative min-h-[400px] transition-transform duration-500"
+          style={
+            isTilt
+              ? {
+                  perspective: '1200px',
+                  transform: 'rotateX(28deg) scale(0.96)',
+                  transformOrigin: '50% 10%',
+                }
+              : undefined
+          }
+        >
+          {enable3d && rectItems.length > 0 && (
+            <React.Suspense fallback={null}>
+              <HouseOverlay
+                items={rectItems}
+                celebrate={celebratingPlotIds}
+                onCelebrationEnd={handleCelebrationEnd}
+                plotElementsRef={plotElementsRef}
+                containerRef={containerRef}
+              />
+            </React.Suspense>
+          )}
+
+          {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([block, blockPlots]) => (
+            <div key={block} className="card mb-4 relative">
+              <h3 className="font-semibold text-slate-700 mb-3">Block {block}</h3>
+              <div className="flex flex-wrap gap-2">
+                {blockPlots.sort((a, b) => a.plotNumber.localeCompare(b.plotNumber, undefined, { numeric: true })).map(plot => (
+                  <button
+                    key={plot.id}
+                    ref={(el) => {
+                      if (el) plotElementsRef.current.set(plot.id, el);
+                      else plotElementsRef.current.delete(plot.id);
+                    }}
+                    onClick={() => setSelected(plot)}
+                    className={`border rounded-lg px-3 py-2 text-xs font-semibold transition-all cursor-pointer min-w-[70px] min-h-[44px] flex flex-col justify-center items-center ${statusColors[plot.status] || 'bg-slate-100 border-slate-300 text-slate-600'}`}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>{plot.plotNumber}</span>
+                      {plot.status === 'booked' && (
+                        <Flag size={11} className="text-amber-700" />
+                      )}
+                    </div>
+                    <div className="font-normal opacity-75">{plot.size}{plot.sizeUnit[0]}</div>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+        </div>
       )}
 
       {/* Plot detail popup */}

@@ -21,8 +21,14 @@ export function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+export const isReducedMotion = prefersReducedMotion;
+
 export function canUseWebGL(itemCount: number = 0): boolean {
   if (!isWebGLAvailable()) return false;
   if (isLowEndDevice() && itemCount > 400) return false;
   return true;
+}
+
+export function shouldUseIsoFallback(itemCount: number = 0): boolean {
+  return !canUseWebGL(itemCount) || prefersReducedMotion();
 }

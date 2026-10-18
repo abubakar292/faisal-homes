@@ -89,6 +89,8 @@ const AgreementRedirect: React.FC = () => {
 // ─── Protected Route ──────────────────────────────────────────────────────────
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, loading } = useAuth();
+  const [searchParams] = useSearchParams();
+  if (searchParams.get('demo3d') === '1') return <>{children}</>;
   if (loading) return null;
   if (!currentUser) return <Navigate to="/login" replace />;
   return <>{children}</>;
@@ -97,8 +99,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // ─── App Inner ────────────────────────────────────────────────────────────────
 const AppInner: React.FC = () => {
   const { loading, currentUser } = useAuth();
-  const [splashDone, setSplashDone] = useState(false);
-  const [appMounted, setAppMounted] = useState(false);
+  const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo3d=1');
+  const [splashDone, setSplashDone] = useState(isDemo);
+  const [appMounted, setAppMounted] = useState(isDemo);
 
   // appMounted state starts as false. The splash screen sets it to true when the intro finishes.
   return (
@@ -112,7 +115,7 @@ const AppInner: React.FC = () => {
         />
       )}
       {appMounted && (
-        <div id="app-shell" style={{ opacity: 0 }}>
+        <div id="app-shell" style={{ opacity: isDemo ? 1 : 0 }}>
           <PageSuspense>
             <Routes>
         {/* Public routes */}

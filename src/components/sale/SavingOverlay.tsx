@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
-import { Printer, FileText, Calendar, ArrowRight, PlusCircle, Check } from 'lucide-react';
+import { Printer, FileText, Calendar, ArrowRight, PlusCircle, Check, Map } from 'lucide-react';
 import BrandLoader from '../brand/BrandLoader';
 
 interface SavingOverlayProps {
@@ -38,6 +39,7 @@ export const SavingOverlay: React.FC<SavingOverlayProps> = ({
   onContinueToCompleteSale,
   onNewSale,
 }) => {
+  const navigate = useNavigate();
   const checkSvgRef = useRef<SVGSVGElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -222,6 +224,15 @@ export const SavingOverlay: React.FC<SavingOverlayProps> = ({
                     className="btn btn-secondary py-2.5 flex items-center justify-center gap-1.5 sm:col-span-2"
                   >
                     Receive First Payment
+                  </button>
+                )}
+                {successResult?.plotId && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/plots/map?focus=${successResult.plotId}&celebrate=1`)}
+                    className="btn bg-[#1a3c6e] text-white hover:bg-[#142f56] py-2.5 flex items-center justify-center gap-1.5 sm:col-span-2 shadow-sm font-semibold"
+                  >
+                    <Map size={15} /> View on Plot Map
                   </button>
                 )}
               </div>

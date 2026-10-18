@@ -10,25 +10,29 @@ export const ROOF_PALETTES = [
 interface IsoHouseProps {
   width?: number | string;
   height?: number | string;
+  size?: number | string;
   palette?: 0 | 1 | 2 | 3;
   variant?: 0 | 1 | 2;
   className?: string;
 }
 
 export const IsoHouse: React.FC<IsoHouseProps> = ({
-  width = '100%',
-  height = '100%',
+  width,
+  height,
+  size,
   palette = 0,
   variant = 0,
   className = '',
 }) => {
+  const finalWidth = size !== undefined ? size : width || '100%';
+  const finalHeight = size !== undefined ? size : height || '100%';
   const p = ROOF_PALETTES[palette % 4];
 
   return (
     <svg
       viewBox="0 0 100 100"
-      width={width}
-      height={height}
+      width={finalWidth}
+      height={finalHeight}
       className={`overflow-visible ${className}`}
       aria-hidden="true"
     >
