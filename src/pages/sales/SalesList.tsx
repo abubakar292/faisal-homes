@@ -295,8 +295,134 @@ export default function SalesList() {
           </div>
         </div>
 
-        {/* Sales Table */}
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        {/* Mobile Cards View (for phones & small screens) */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <div className="py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
+              Loading sales records...
+            </div>
+          ) : paginatedSales.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
+              No sales matched your criteria.
+            </div>
+          ) : (
+            paginatedSales.map(sale => {
+              const customer = getCustomer(sale.customerId);
+              const plot = getPlot(sale.plotId);
+              const received = (sale.finalPrice || 0) - (sale.remainingAmount || 0);
+              const isHighlighted = sale.id === querySaleId;
+
+              return (
+                <div
+                  key={sale.id}
+                  className={`bg-white rounded-xl border p-4 shadow-sm transition-all ${
+                    isHighlighted ? 'border-amber-400 bg-amber-50/30' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  {/* Top Bar: Sale #, Date, Status */}
+                  <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
+                    <div>
+                      <div className="font-mono font-bold text-sm text-[#1a3c6e]">
+                        {sale.saleNumber || sale.id.substring(0, 8)}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {formatDate(sale.saleDate || sale.createdAt)}
+                      </div>
+                    </div>
+                    <StatusBadge status={sale.status} />
+                  </div>
+
+                  {/* Customer & Plot Info */}
+                  <div className="grid grid-cols-2 gap-3 py-3 border-b border-slate-100 text-xs">
+                    <div>
+                      <span className="text-slate-400 text-[10px] uppercase font-semibold block">Customer</span>
+                      <span className="font-bold text-slate-800 text-sm block mt-0.5 truncate">{customer?.name || '-'}</span>
+                      <span className="text-slate-500 text-[11px] font-mono block">{customer?.phone || customer?.cnic || ''}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] uppercase font-semibold block">Plot</span>
+                      {plot ? (
+                        <>
+                          <span className="font-bold text-[#1a3c6e] text-sm block mt-0.5">
+                            {plot.plotNumber} <span className="text-xs font-normal text-slate-600">Block {plot.block}</span>
+                          </span>
+                          <span className="text-slate-500 text-[11px] block">{plot.size} {plot.sizeUnit}</span>
+                        </>
+                      ) : (
+                        <span className="text-slate-400 mt-0.5 block">-</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Financial Metrics */}
+                  <div className="grid grid-cols-2 gap-2 py-3 border-b border-slate-100 text-xs bg-slate-50/60 -mx-4 px-4">
+                    <div>
+                      <span className="text-slate-500 text-[10px] block">Final Price</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(sale.finalPrice)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[10px] block">Down Payment</span>
+                      <span className="font-semibold text-slate-700">{formatCurrency(sale.downPayment)}</span>
+                      {sale.downPaymentStatus === 'complete' ? (
+                        <span className="text-[10px] text-emerald-600 font-bold ml-1">Paid</span>
+                      ) : (
+                        <span className="text-[10px] text-amber-600 font-bold ml-1">Pending</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[10px] block">Received</span>
+                      <span className="font-bold text-emerald-700">{formatCurrency(received)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[10px] block">Remaining</span>
+                      <span className="font-bold text-rose-600">{formatCurrency(sale.remainingAmount)}</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons: 100% visible, easy to tap */}
+                  <div className="pt-3 flex flex-wrap items-center justify-between gap-1.5">
+                    <button
+                      onClick={() => setSelectedSale(sale)}
+                      className="flex-1 min-w-[70px] py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      title="View Details"
+                    >
+                      <Eye size={13} />
+                      <span>Details</span>
+                    </button>
+                    <button
+                      onClick={() => handlePrintAgreement(sale)}
+                      className="flex-1 min-w-[70px] py-2 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      title="Print Agreement"
+                    >
+                      <FileText size={13} />
+                      <span>Agreement</span>
+                    </button>
+                    <button
+                      onClick={() => handlePrintSchedule(sale)}
+                      disabled={loadingActionId === sale.id}
+                      className="flex-1 min-w-[70px] py-2 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors disabled:opacity-50 cursor-pointer"
+                      title="Print Schedule"
+                    >
+                      <Printer size={13} />
+                      <span>Schedule</span>
+                    </button>
+                    <button
+                      onClick={() => navigate(`/payments/receive?customerId=${sale.customerId}&saleId=${sale.id}`)}
+                      className="flex-1 min-w-[70px] py-2 px-2 bg-[#1a3c6e] hover:bg-[#0f2444] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      title="Receive Payment"
+                    >
+                      <Receipt size={13} />
+                      <span>Pay</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Sales Table */}
+        <div className="hidden md:block overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 font-semibold text-slate-600">

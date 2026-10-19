@@ -158,7 +158,7 @@ const Layout: React.FC = () => {
         aria-label="Desktop navigation"
       >
         <div
-          className="pt-16 h-full transition-[width] duration-250 ease-out"
+          className="pt-[var(--navbar-h-desktop)] h-full transition-[width] duration-250 ease-out"
           style={{ width: desktopOpen ? `${SIDEBAR_EXPANDED_W}px` : `${SIDEBAR_COLLAPSED_W}px` }}
         >
           <Sidebar collapsed={!desktopOpen} onExpand={() => setDesktopOpen(true)} />
@@ -217,7 +217,7 @@ const Layout: React.FC = () => {
 
       {/* Page content */}
       <motion.main
-        className="flex-1 pt-14 sm:pt-16 min-h-[100dvh] transition-none relative"
+        className="flex-1 pt-[var(--navbar-h-mobile)] sm:pt-[var(--navbar-h-desktop)] min-h-[100dvh] transition-none relative"
         animate={{ paddingLeft: isDesktop ? (desktopOpen ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W) : 0 }}
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       >

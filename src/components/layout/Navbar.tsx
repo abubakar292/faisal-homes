@@ -50,7 +50,7 @@ const Navbar: React.FC<Props> = ({ onToggleSidebar, pageTitle = 'Dashboard' }) =
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 h-14 sm:h-16 z-40 flex items-center px-3 sm:px-4 gap-2 sm:gap-4 transition-all"
+      className="fixed top-0 left-0 right-0 z-40 flex items-center px-3 sm:px-4 gap-2 sm:gap-4 transition-all h-[var(--navbar-h-mobile)] sm:h-[var(--navbar-h-desktop)]"
       style={{
         background: '#1a3c6e',
         borderBottom: '2px solid #e8a020',

@@ -53,7 +53,7 @@ export default function DownPayments() {
     load();
 
     const unsub = subscribeCollection<Sale>('sales', (data) => {
-      setSales(data.filter(s => s.status === 'active' && (s.remainingDownPayment || 0) > 0));
+      setSales(data.filter(s => s.status === 'active' && ((s.downPaymentAmount || 0) > 0 || (s.remainingDownPayment || 0) > 0 || (s.downPaymentReceived || 0) > 0)));
     });
     return () => unsub();
   }, []);
@@ -66,13 +66,15 @@ export default function DownPayments() {
       const plot = plots.find(p => p.id === sale.plotId);
       if (!customer || !plot) return null;
 
-      const remainingRequired = sale.remainingDownPayment || 0;
+      const totalDownPayment = sale.downPaymentAmount || 0;
+      const bookingPaid = sale.bookingAmountPaid || 0;
+      const remainingRequired = Math.max(0, totalDownPayment - bookingPaid);
       const receivedSoFar = sale.downPaymentReceived || 0;
       const stillPending = Math.max(0, remainingRequired - receivedSoFar);
 
       let status: 'complete' | 'partial' | 'pending';
-      if (stillPending === 0) status = 'complete';
-      else if (receivedSoFar > 0) status = 'partial';
+      if (sale.downPaymentStatus === 'complete' || stillPending === 0) status = 'complete';
+      else if (receivedSoFar > 0 || sale.downPaymentStatus === 'partial') status = 'partial';
       else status = 'pending';
 
       return {

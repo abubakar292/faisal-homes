@@ -44,7 +44,16 @@ const PendingPaymentsReport: React.FC = () => {
       ]);
 
       const activeSales = new Set(s.filter(sale => sale.status !== 'cancelled').map(sale => sale.id));
-      const activeInsts = insts.filter(i => activeSales.has(i.saleId) && getOutstanding(i) > 0);
+      const activeInsts = insts.filter(i => {
+        if (!activeSales.has(i.saleId) || getOutstanding(i) <= 0) return false;
+        if (i.type === 'down_payment') {
+          const sale = s.find(sa => sa.id === i.saleId);
+          if (!sale || sale.downPaymentStatus === 'complete') return false;
+          const rem = Math.max(0, (sale.downPaymentAmount || 0) - (sale.bookingAmountPaid || 0) - (sale.downPaymentReceived || 0));
+          return rem > 0;
+        }
+        return true;
+      });
 
       setInstallments(activeInsts);
       setCustomers(cust);

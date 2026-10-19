@@ -461,7 +461,7 @@ export async function saveSale(input: SaveSaleInput): Promise<SubmitServiceResul
     saleDate: saleDateObj,
     rows: input.rows,
     remainingDownPayment: planMath.remainingDownPayment,
-    includeRemainingDownPayment: input.includeRemainingDownPayment,
+    includeRemainingDownPayment: false,
     onPossessionEnabled: input.onPossessionEnabled,
     onPossessionAmount: input.onPossessionAmount,
     onPossessionDate: parseDateInput(input.onPossessionDate),

@@ -213,43 +213,67 @@ export function buildInstallments(
 
   const allInsts: Omit<Installment, 'id'>[] = [];
   const regularCount = rows.reduce((s, r) => s + getRowCount(r), 0);
-  const totalMonths = rows.reduce((s, r) => s + (r.months || 0), 0);
   let instNum = 1;
 
-  // Remaining Down Payment
-  if (remainingDownPayment > 0 && includeRemainingDownPayment) {
-    allInsts.push({
-      receiptNumber: '',
-      saleId,
-      customerId,
-      plotId,
-      installmentNumber: 0,
-      totalInstallments: regularCount,
-      type: 'down_payment',
-      dueDate: saleDate,
-      amountDue: remainingDownPayment,
-      amountPaid: 0,
-      paymentDate: null,
-      paymentMethod: '',
-      bankName: '',
-      chequeNumber: '',
-      status: 'pending',
-      notes: 'Remaining Down Payment',
-      createdAt: new Date(),
-    });
+  // Regular installments: one per interval inside each row
+  // Semi-annual amounts are combined into the corresponding 6th, 12th, 18th... month on the SAME row
+  let offset = 0;
+  for (const row of rows) {
+    const interval = getRowInterval(row);
+    const count = getRowCount(row);
+    const frequency = INTERVAL_FREQUENCY[interval] || `Every ${interval} months`;
+    for (let k = 1; k <= count; k++) {
+      const isLast = k === count;
+      const baseMonthlyAmount = isLast
+        ? row.monthlyAmount + (row.totalAmount - row.monthlyAmount * count)
+        : row.monthlyAmount;
+
+      const monthIndex = offset + k * interval;
+      const isSemiAnnual = semiAnnualEnabled && semiAnnualAmount > 0 && monthIndex % 6 === 0;
+      const totalAmountDue = isSemiAnnual
+        ? baseMonthlyAmount + semiAnnualAmount
+        : baseMonthlyAmount;
+
+      const note = isSemiAnnual
+        ? `Includes Rs. ${semiAnnualAmount.toLocaleString()} Semi-Annual Payment`
+        : '';
+
+      allInsts.push({
+        receiptNumber: '',
+        saleId,
+        customerId,
+        plotId,
+        installmentNumber: instNum++,
+        totalInstallments: regularCount,
+        type: isSemiAnnual ? 'semi_annual' : 'monthly',
+        frequency,
+        dueDate: addMonths(saleDate, monthIndex),
+        amountDue: totalAmountDue,
+        amountPaid: 0,
+        paymentDate: null,
+        paymentMethod: '',
+        bankName: '',
+        chequeNumber: '',
+        status: 'pending',
+        notes: note,
+        createdAt: new Date(),
+      });
+    }
+    offset += row.months;
   }
 
-  // On Possession
+  // On Possession (if enabled)
   if (onPossessionEnabled && onPossessionAmount > 0) {
+    const totalMonths = rows.reduce((s, r) => s + (r.months || 0), 0);
     allInsts.push({
       receiptNumber: '',
       saleId,
       customerId,
       plotId,
-      installmentNumber: 0,
-      totalInstallments: regularCount,
+      installmentNumber: instNum++,
+      totalInstallments: regularCount + 1,
       type: 'on_possession',
-      dueDate: onPossessionDate || saleDate,
+      dueDate: onPossessionDate || addMonths(saleDate, totalMonths),
       amountDue: onPossessionAmount,
       amountPaid: 0,
       paymentDate: null,
@@ -260,68 +284,6 @@ export function buildInstallments(
       notes: onPossessionNotes || 'On Possession Payment',
       createdAt: new Date(),
     });
-  }
-
-  // Regular installments: one per interval inside each row
-  let offset = 0;
-  for (const row of rows) {
-    const interval = getRowInterval(row);
-    const count = getRowCount(row);
-    const frequency = INTERVAL_FREQUENCY[interval] || `Every ${interval} months`;
-    for (let k = 1; k <= count; k++) {
-      const isLast = k === count;
-      const amount = isLast
-        ? row.monthlyAmount + (row.totalAmount - row.monthlyAmount * count)
-        : row.monthlyAmount;
-      allInsts.push({
-        receiptNumber: '',
-        saleId,
-        customerId,
-        plotId,
-        installmentNumber: instNum++,
-        totalInstallments: regularCount,
-        type: 'monthly',
-        frequency,
-        dueDate: addMonths(saleDate, offset + k * interval),
-        amountDue: amount,
-        amountPaid: 0,
-        paymentDate: null,
-        paymentMethod: '',
-        bankName: '',
-        chequeNumber: '',
-        status: 'pending',
-        notes: '',
-        createdAt: new Date(),
-      });
-    }
-    offset += row.months;
-  }
-
-  // Semi-annual extra payments on months 6, 12, 18...
-  if (semiAnnualEnabled && semiAnnualAmount > 0) {
-    const semiAnnualCount = Math.floor(totalMonths / 6);
-    for (let j = 1; j <= semiAnnualCount; j++) {
-      const month = j * 6;
-      allInsts.push({
-        receiptNumber: '',
-        saleId,
-        customerId,
-        plotId,
-        installmentNumber: month,
-        totalInstallments: regularCount,
-        type: 'semi_annual',
-        dueDate: addMonths(saleDate, month),
-        amountDue: semiAnnualAmount,
-        amountPaid: 0,
-        paymentDate: null,
-        paymentMethod: '',
-        bankName: '',
-        chequeNumber: '',
-        status: 'pending',
-        notes: `Semi-Annual Payment ${j}`,
-        createdAt: new Date(),
-      });
-    }
   }
 
   return allInsts;

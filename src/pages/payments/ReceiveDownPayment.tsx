@@ -1,5 +1,5 @@
 import { db } from '../../firebase/config';
-import { writeBatch, doc, collection } from 'firebase/firestore';
+import { writeBatch, doc, collection, query, where, getDocs } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreditCard, Save, X } from 'lucide-react';
@@ -169,7 +169,28 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
       const saleRef = doc(db, 'sales', saleId);
       batch.update(saleRef, {
         downPaymentReceived: newReceived,
+        remainingDownPayment: newPending,
         downPaymentStatus:   newStatus,
+      });
+
+      // Synchronize any down_payment installments in Firestore so they never stay pending
+      const instSnap = await getDocs(
+        query(
+          collection(db, 'installments'),
+          where('saleId', '==', saleId),
+          where('type', '==', 'down_payment')
+        )
+      );
+      instSnap.forEach(d => {
+        batch.update(d.ref, {
+          status: newPending === 0 ? 'paid' : 'partial',
+          amountPaid: newReceived,
+          paymentDate: paidDate,
+          paymentMethod: paymentMethod,
+          bankName: bankName.trim(),
+          chequeNumber: chequeNumber.trim(),
+          receiptNumber: receiptNumber,
+        });
       });
 
       await batch.commit();

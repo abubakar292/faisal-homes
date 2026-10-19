@@ -118,12 +118,19 @@ const NotificationBell: React.FC = () => {
       // 3. Pending down payments
       const activeSales = sales.filter(s => s.status !== 'cancelled');
       const pendingDP = activeSales.filter(s => {
-        const remaining = (s.downPaymentAmount || 0) - (s.bookingAmountPaid || 0);
+        if (s.downPaymentStatus === 'complete') return false;
+        const totalRequired = s.downPaymentAmount || 0;
+        const totalReceived = (s.bookingAmountPaid || 0) + (s.downPaymentReceived || 0);
+        const remaining = Math.max(0, totalRequired - totalReceived);
         return remaining > 0;
       });
 
       if (pendingDP.length > 0) {
-        const totalPendingDP = pendingDP.reduce((s, sale) => s + ((sale.downPaymentAmount || 0) - (sale.bookingAmountPaid || 0)), 0);
+        const totalPendingDP = pendingDP.reduce((s, sale) => {
+          const totalRequired = sale.downPaymentAmount || 0;
+          const totalReceived = (sale.bookingAmountPaid || 0) + (sale.downPaymentReceived || 0);
+          return s + Math.max(0, totalRequired - totalReceived);
+        }, 0);
         notifs.push({
           id: 'dp-pending-all',
           type: 'down_payment_pending',
