@@ -305,6 +305,8 @@ export interface AppUser {
   role: UserRole;
   active: boolean;
   createdAt: Date;
+  isEmailVerified?: boolean;
+  emailVerifiedAt?: Date;
 }
 
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────

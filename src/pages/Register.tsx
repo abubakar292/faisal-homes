@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle, Shield, AlertCircle } from 'lucide-react';
 import gsap from 'gsap';
 import Logo from '../components/Logo';
+import OtpVerificationStep from '../components/auth/OtpVerificationStep';
+import { sendEmailOtp, verifyEmailOtp } from '../services/emailOtpService';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -14,8 +16,12 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loadingState, setLoadingState] = useState<'idle' | 'loading' | 'success'>('idle');
   const [focusedField, setFocusedField] = useState<'email' | 'password' | 'confirm' | null>(null);
+
+  const [step, setStep] = useState<'form' | 'otp'>('form');
+  const [registeredUid, setRegisteredUid] = useState<string>('');
+  const [initialDevCode, setInitialDevCode] = useState<string | undefined>();
   
-  const { createUser, loginWithGoogle } = useAuth();
+  const { createUser, loginWithGoogle, markEmailVerified } = useAuth();
   const navigate = useNavigate();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,9 +98,17 @@ export default function Register() {
     try {
       setError('');
       setLoadingState('loading');
-      await createUser(email, password);
-      setLoadingState('success');
-      setTimeout(() => navigate('/'), 800);
+      // 1. Create account with isEmailVerified = false
+      const uid = await createUser(email, password, false);
+      setRegisteredUid(uid);
+
+      // 2. Generate and send 6-digit OTP code to their real email
+      const otpRes = await sendEmailOtp(email, uid);
+      if (otpRes.devCode) {
+        setInitialDevCode(otpRes.devCode);
+      }
+      setLoadingState('idle');
+      setStep('otp');
     } catch (err: any) {
       setLoadingState('idle');
       if (err.code === 'auth/email-already-in-use') {
@@ -116,6 +130,29 @@ export default function Register() {
       shakeForm();
     }
   };
+
+  if (step === 'otp') {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4">
+        <OtpVerificationStep
+          email={email}
+          initialDevCode={initialDevCode}
+          onVerify={async (code) => {
+            const res = await verifyEmailOtp(registeredUid, code);
+            if (res.success) {
+              await markEmailVerified(registeredUid);
+              setTimeout(() => navigate('/'), 600);
+            }
+            return res;
+          }}
+          onResend={async () => {
+            return await sendEmailOtp(email, registeredUid);
+          }}
+          onBack={() => setStep('form')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className="min-h-[100dvh] flex bg-slate-50 overflow-hidden">

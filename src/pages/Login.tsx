@@ -4,6 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react';
 import gsap from 'gsap';
 import Logo from '../components/Logo';
+import OtpVerificationStep from '../components/auth/OtpVerificationStep';
+import { sendEmailOtp, verifyEmailOtp } from '../services/emailOtpService';
+import { getDocument } from '../firebase/firestore';
+import type { AppUser } from '../types';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,8 +16,12 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loadingState, setLoadingState] = useState<'idle' | 'loading' | 'success'>('idle');
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
+
+  const [step, setStep] = useState<'form' | 'otp'>('form');
+  const [unverifiedUid, setUnverifiedUid] = useState<string>('');
+  const [initialDevCode, setInitialDevCode] = useState<string | undefined>();
   
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, markEmailVerified } = useAuth();
   const navigate = useNavigate();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,9 +73,24 @@ export default function Login() {
     try {
       setError('');
       setLoadingState('loading');
-      await login(email, password);
+      const user = await login(email, password);
+
+      // Check if user has verified their email on initial setup
+      const userData = await getDocument<AppUser>('users', user.uid);
+      if (userData && userData.isEmailVerified === false) {
+        // First-time unverified user: send OTP and switch to OTP step
+        const otpRes = await sendEmailOtp(email, user.uid);
+        setUnverifiedUid(user.uid);
+        if (otpRes.devCode) {
+          setInitialDevCode(otpRes.devCode);
+        }
+        setLoadingState('idle');
+        setStep('otp');
+        return;
+      }
+
       setLoadingState('success');
-      setTimeout(() => navigate('/'), 800);
+      setTimeout(() => navigate('/'), 600);
     } catch (err: any) {
       setLoadingState('idle');
       setError('Failed to log in. Please check your credentials.');
@@ -85,6 +108,29 @@ export default function Login() {
       shakeForm();
     }
   };
+
+  if (step === 'otp') {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4">
+        <OtpVerificationStep
+          email={email}
+          initialDevCode={initialDevCode}
+          onVerify={async (code) => {
+            const res = await verifyEmailOtp(unverifiedUid, code);
+            if (res.success) {
+              await markEmailVerified(unverifiedUid);
+              setTimeout(() => navigate('/'), 600);
+            }
+            return res;
+          }}
+          onResend={async () => {
+            return await sendEmailOtp(email, unverifiedUid);
+          }}
+          onBack={() => setStep('form')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className="min-h-[100dvh] flex bg-slate-50 overflow-hidden">
