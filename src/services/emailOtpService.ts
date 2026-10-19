@@ -71,11 +71,19 @@ export async function sendEmailOtp(
       return { success: true, message: `Security code sent to ${email}` };
     } catch (err: any) {
       console.error('EmailJS send error:', err);
-      const detail = err?.text || err?.message || 'Failed to dispatch email';
+      const detail = String(err?.text || err?.message || 'Failed to dispatch email');
+      let friendlyError = `Email delivery error: ${detail}`;
+      if (detail.includes('insufficient authentication scopes') || detail.includes('Gmail_API')) {
+        friendlyError = 'Gmail permission error: In EmailJS dashboard, click Reconnect on your Gmail service and make sure to check the box: "Send email on your behalf".';
+      } else if (detail.includes('template ID not found')) {
+        friendlyError = 'Template not found: Please verify your Template ID in EmailJS dashboard.';
+      } else if (detail.includes('service ID not found')) {
+        friendlyError = 'Service not found: Please verify your Service ID in EmailJS dashboard.';
+      }
       return {
         success: false,
         message: detail,
-        error: `Email delivery error: ${detail}. Please check your Template ID in EmailJS dashboard.`,
+        error: friendlyError,
       };
     }
   }
