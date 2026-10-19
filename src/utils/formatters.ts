@@ -93,11 +93,19 @@ export const daysUntilDue = (inst: any, today: Date = new Date()): number => {
 };
 
 export const isInstallmentOverdue = (inst: any): boolean => {
+  if (!inst) return false;
+  // Down payments are tracked in down-payment management, never as regular overdue installments
+  if (inst.type === 'down_payment') return false;
+  if (inst.status === 'paid' || inst.status === 'cancelled') return false;
   return getOutstanding(inst) > 0 && daysOverdue(inst) > 0;
 };
 
 export const getInstallmentStatus = (inst: any): string => {
+  if (!inst) return 'pending';
   if (inst.status === 'cancelled') return 'cancelled';
+  if (inst.type === 'down_payment') {
+    return (inst.status === 'paid' || getOutstanding(inst) === 0) ? 'paid' : 'pending';
+  }
   if (getOutstanding(inst) === 0 && (inst.amountPaid || 0) >= (inst.amountDue || 0)) return 'paid';
   if (isInstallmentOverdue(inst)) return 'overdue';
   if ((inst.amountPaid || 0) > 0) return 'partial';

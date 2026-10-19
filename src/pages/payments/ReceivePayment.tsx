@@ -102,7 +102,7 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
   useEffect(() => {
     if (!saleId) { setPendingInsts([]); setInstallmentId(''); return; }
     const pending = allInsts
-      .filter(i => i.saleId === saleId && i.status !== 'paid')
+      .filter(i => i.saleId === saleId && i.type !== 'down_payment' && i.status !== 'paid')
       .sort((a, b) => {
         const dateA = new Date(a.dueDate).getTime();
         const dateB = new Date(b.dueDate).getTime();
@@ -172,7 +172,7 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
       const outstanding = selectedInstallment.amountDue - (selectedInstallment.amountPaid || 0);
       
       if (currentAmountPaid > outstanding) {
-        toast.error(`Cannot pay more than outstanding amount (Rs. ${formatCurrency(outstanding)})`);
+        toast.error(`Cannot pay more than outstanding amount (${formatCurrency(outstanding)})`);
         setLoading(false);
         return;
       }

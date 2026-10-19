@@ -46,12 +46,8 @@ const PendingPaymentsReport: React.FC = () => {
       const activeSales = new Set(s.filter(sale => sale.status !== 'cancelled').map(sale => sale.id));
       const activeInsts = insts.filter(i => {
         if (!activeSales.has(i.saleId) || getOutstanding(i) <= 0) return false;
-        if (i.type === 'down_payment') {
-          const sale = s.find(sa => sa.id === i.saleId);
-          if (!sale || sale.downPaymentStatus === 'complete') return false;
-          const rem = Math.max(0, (sale.downPaymentAmount || 0) - (sale.bookingAmountPaid || 0) - (sale.downPaymentReceived || 0));
-          return rem > 0;
-        }
+        // Down payments have their own tracker and screen (/payments/down-payments)
+        if (i.type === 'down_payment') return false;
         return true;
       });
 
@@ -112,7 +108,7 @@ const PendingPaymentsReport: React.FC = () => {
   }, [filteredInsts]);
 
   const buildWaMsg = (inst: Installment, customer: Customer) => {
-    return `Assalam-o-Alaikum ${customer.name},\n\nAapki plot ${plotInfo(inst.plotId)} ki qist baqi hai:\nAmount: Rs. ${formatCurrency(getOutstanding(inst))}\nDue Date: ${formatDate(inst.dueDate)}\n\nMeherbani farma ke jald payment karein.\n\n${company?.name || 'Faisal Homes'}\n${company?.phone || ''}`;
+    return `Assalam-o-Alaikum ${customer.name},\n\nAapki plot ${plotInfo(inst.plotId)} ki qist baqi hai:\nAmount: ${formatCurrency(getOutstanding(inst))}\nDue Date: ${formatDate(inst.dueDate)}\n\nMeherbani farma ke jald payment karein.\n\n${company?.name || 'Faisal Homes'}\n${company?.phone || ''}`;
   };
 
   // ─── CUSTOMERS VIEW LOGIC ───

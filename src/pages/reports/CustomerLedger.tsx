@@ -144,9 +144,9 @@ const CustomerLedger: React.FC = () => {
     if (overdue.length === 0) { alert('No overdue installments to remind'); return; }
     let msg = `Assalam-o-Alaikum ${customer.name},\n\nAapke plot ki mad mein mandarja zail qistein overdue hain:\n\n`;
     overdue.forEach(r => {
-      msg += `- ${r.plotLabel}: ${r.label} (Rs. ${formatCurrency(r.outstanding)})\n`;
+      msg += `- ${r.plotLabel}: ${r.label} (${formatCurrency(r.outstanding)})\n`;
     });
-    msg += `\nTotal Overdue: Rs. ${formatCurrency(st.kpis.overdueAmount)}\nMeherbani farma ke jald az jald payment clear karein.\n\nFaisal Homes`;
+    msg += `\nTotal Overdue: ${formatCurrency(st.kpis.overdueAmount)}\nMeherbani farma ke jald az jald payment clear karein.\n\nFaisal Homes`;
     window.open(getWhatsAppUrl(customer.phone, msg), '_blank');
   };
 

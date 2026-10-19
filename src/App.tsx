@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 
 initMotionDebug();
 import Layout from './components/layout/Layout';
+import { healSalesAndInstallments } from './services/saleService';
 
 // ─── Lazy page imports ────────────────────────────────────────────────────────
 const Login    = lazy(() => import('./pages/Login'));
@@ -104,6 +105,12 @@ const AppInner: React.FC = () => {
     (window.location.search.includes('demo=1') || window.location.search.includes('demo3d=1'));
   const [splashDone, setSplashDone] = useState(isDemo);
   const [appMounted, setAppMounted] = useState(isDemo);
+
+  useEffect(() => {
+    if (currentUser) {
+      healSalesAndInstallments().catch(console.error);
+    }
+  }, [currentUser]);
 
   // appMounted state starts as false. The splash screen sets it to true when the intro finishes.
   return (

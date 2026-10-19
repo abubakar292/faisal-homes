@@ -14,6 +14,7 @@ import {
   formatDateInput, parseDateInput, generateReceiptNumber, formatCurrency,
 } from '../../utils/formatters';
 import { printInNewWindow, generateDownPaymentReceiptHTML } from '../../utils/printUtils';
+import { healSalesAndInstallments } from '../../services/saleService';
 import type { Sale, Customer, Plot, DownPaymentTransaction, CompanySettings } from '../../types';
 
 interface Props { embedded?: boolean; }
@@ -54,6 +55,7 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
       setCustomers(c);
       setPlots(p);
       if (comp) setCompany(comp);
+      healSalesAndInstallments().catch(console.error);
     };
     load();
   }, []);
@@ -119,7 +121,7 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
       return {
         value: s.id,
         label: s.saleNumber,
-        sublabel: p ? `${p.plotNumber} Block ${p.block} — Pending: Rs. ${formatCurrency(Math.max(0, (s.remainingDownPayment || 0) - (s.downPaymentReceived || 0)))}` : '',
+        sublabel: p ? `${p.plotNumber} Block ${p.block} - Pending: ${formatCurrency(Math.max(0, (s.remainingDownPayment || 0) - (s.downPaymentReceived || 0)))}` : '',
       };
     });
 
@@ -134,7 +136,7 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
       return;
     }
     if (amountExceedsMax) {
-      toast.error(`Amount cannot exceed Rs. ${formatCurrency(stillPending)}`);
+      toast.error(`Amount cannot exceed ${formatCurrency(stillPending)}`);
       return;
     }
 
@@ -182,18 +184,23 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
         )
       );
       instSnap.forEach(d => {
-        batch.update(d.ref, {
-          status: newPending === 0 ? 'paid' : 'partial',
-          amountPaid: newReceived,
-          paymentDate: paidDate,
-          paymentMethod: paymentMethod,
-          bankName: bankName.trim(),
-          chequeNumber: chequeNumber.trim(),
-          receiptNumber: receiptNumber,
-        });
+        if (newPending === 0) {
+          batch.delete(d.ref);
+        } else {
+          batch.update(d.ref, {
+            status: 'partial',
+            amountPaid: newReceived,
+            paymentDate: paidDate,
+            paymentMethod: paymentMethod,
+            bankName: bankName.trim(),
+            chequeNumber: chequeNumber.trim(),
+            receiptNumber: receiptNumber,
+          });
+        }
       });
 
       await batch.commit();
+      healSalesAndInstallments().catch(console.error);
 
       // Print receipt
       if (company) {

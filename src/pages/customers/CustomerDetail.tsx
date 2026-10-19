@@ -5,6 +5,7 @@ import PageHeader from '../../components/ui/PageHeader';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { getDocument, getCollection } from '../../firebase/firestore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { consolidateSaleInstallments } from '../../utils/saleCalc';
 import type { Customer, Sale, Plot, Installment } from '../../types';
 import { BrandLoader } from '../../components/brand';
 
@@ -25,7 +26,8 @@ const CustomerDetail: React.FC = () => {
       const allPlots = await getCollection<Plot>('plots');
       setPlots(allPlots.filter(p => mine.some(s => s.plotId === p.id)));
       const allInst  = await getCollection<Installment>('installments');
-      setInstallments(allInst.filter(i => i.customerId === id));
+      const myInsts = consolidateSaleInstallments(allInst.filter(i => i.customerId === id));
+      setInstallments(myInsts);
     });
   }, [id]);
 
@@ -33,8 +35,8 @@ const CustomerDetail: React.FC = () => {
     return <BrandLoader />;
   }
 
-  const paidAmount    = installments.filter(i => i.status === 'paid').reduce((s, i) => s + i.amountPaid, 0);
-  const pendingAmount = installments.filter(i => i.status !== 'paid').reduce((s, i) => s + i.amountDue, 0);
+  const paidAmount    = installments.filter(i => i.status === 'paid' && i.type !== 'down_payment').reduce((s, i) => s + (i.amountPaid || 0), 0);
+  const pendingAmount = installments.filter(i => i.status !== 'paid' && i.type !== 'down_payment').reduce((s, i) => s + (i.amountDue - (i.amountPaid || 0)), 0);
   const plotById      = (pid: string) => plots.find(p => p.id === pid);
 
   const docEntries = [

@@ -62,20 +62,20 @@ export const generateCustomerLedgerHTML = (
         <div style="font-size:12px;color:#475569;">Phone: ${customer.phone} ${customer.phone2 ? `/ ${customer.phone2}` : ''}</div>
       </div>
       <div style="flex:1;text-align:right;">
-        <div style="font-size:12px;color:#475569;margin-bottom:2px;">Final Price: <b>Rs. ${formatCurrency(statement.summary.finalPrice)}</b></div>
-        <div style="font-size:12px;color:#475569;margin-bottom:2px;">Total Received: <b style="color:#16a34a;">Rs. ${formatCurrency(statement.summary.totalReceived)}</b></div>
-        <div style="font-size:14px;color:#1a3c6e;margin-top:5px;">Remaining Balance: <b>Rs. ${formatCurrency(statement.summary.remainingBalance)}</b></div>
+        <div style="font-size:12px;color:#475569;margin-bottom:2px;">Final Price: <b>${formatCurrency(statement.summary.finalPrice)}</b></div>
+        <div style="font-size:12px;color:#475569;margin-bottom:2px;">Total Received: <b style="color:#16a34a;">${formatCurrency(statement.summary.totalReceived)}</b></div>
+        <div style="font-size:14px;color:#1a3c6e;margin-top:5px;">Remaining Balance: <b>${formatCurrency(statement.summary.remainingBalance)}</b></div>
       </div>
     </div>
 
     <div style="display:flex;gap:10px;margin-bottom:20px;">
       <div style="flex:1;border:1px solid #ef4444;border-left:4px solid #ef4444;padding:10px;border-radius:4px;">
         <div style="font-size:10px;color:#64748b;text-transform:uppercase;">Overdue Amount (${statement.kpis.overdueCount})</div>
-        <div style="font-size:16px;font-weight:bold;color:#ef4444;">Rs. ${formatCurrency(statement.kpis.overdueAmount)}</div>
+        <div style="font-size:16px;font-weight:bold;color:#ef4444;">${formatCurrency(statement.kpis.overdueAmount)}</div>
       </div>
       <div style="flex:1;border:1px solid #f59e0b;border-left:4px solid #f59e0b;padding:10px;border-radius:4px;">
         <div style="font-size:10px;color:#64748b;text-transform:uppercase;">Pending Amount (${statement.kpis.pendingCount})</div>
-        <div style="font-size:16px;font-weight:bold;color:#f59e0b;">Rs. ${formatCurrency(statement.kpis.pendingAmount)}</div>
+        <div style="font-size:16px;font-weight:bold;color:#f59e0b;">${formatCurrency(statement.kpis.pendingAmount)}</div>
       </div>
     </div>
 
@@ -95,9 +95,9 @@ export const generateCustomerLedgerHTML = (
       <tfoot>
         <tr>
           <td colspan="3" style="text-align:right;font-weight:bold;">Totals:</td>
-          <td style="text-align:right;font-weight:bold;color:#dc2626;">Rs. ${formatCurrency(statement.statement.reduce((s, t) => s + t.debit, 0))}</td>
-          <td style="text-align:right;font-weight:bold;color:#16a34a;">Rs. ${formatCurrency(statement.statement.reduce((s, t) => s + t.credit, 0))}</td>
-          <td style="text-align:right;font-weight:bold;font-size:14px;">Rs. ${formatCurrency(statement.summary.remainingBalance)}</td>
+          <td style="text-align:right;font-weight:bold;color:#dc2626;">${formatCurrency(statement.statement.reduce((s, t) => s + t.debit, 0))}</td>
+          <td style="text-align:right;font-weight:bold;color:#16a34a;">${formatCurrency(statement.statement.reduce((s, t) => s + t.credit, 0))}</td>
+          <td style="text-align:right;font-weight:bold;font-size:14px;">${formatCurrency(statement.summary.remainingBalance)}</td>
         </tr>
       </tfoot>
     </table>
@@ -129,9 +129,9 @@ export const generateCustomerLedgerHTML = (
       <tfoot>
         <tr>
           <td colspan="3" style="text-align:right;font-weight:bold;">Totals:</td>
-          <td style="text-align:right;font-weight:bold;">Rs. ${formatCurrency(statement.rows.reduce((s, r) => s + r.amountDue, 0))}</td>
-          <td style="text-align:right;font-weight:bold;color:#16a34a;">Rs. ${formatCurrency(statement.rows.reduce((s, r) => s + r.amountPaid, 0))}</td>
-          <td style="text-align:right;font-weight:bold;color:#1a3c6e;">Rs. ${formatCurrency(statement.rows.reduce((s, r) => s + r.outstanding, 0))}</td>
+          <td style="text-align:right;font-weight:bold;">${formatCurrency(statement.rows.reduce((s, r) => s + r.amountDue, 0))}</td>
+          <td style="text-align:right;font-weight:bold;color:#16a34a;">${formatCurrency(statement.rows.reduce((s, r) => s + r.amountPaid, 0))}</td>
+          <td style="text-align:right;font-weight:bold;color:#1a3c6e;">${formatCurrency(statement.rows.reduce((s, r) => s + r.outstanding, 0))}</td>
           <td></td>
         </tr>
       </tfoot>

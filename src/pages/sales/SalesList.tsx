@@ -13,6 +13,7 @@ import StatusBadge from '../../components/ui/StatusBadge';
 import { getCollection, getDocument } from '../../firebase/firestore';
 import { where } from 'firebase/firestore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { consolidateSaleInstallments } from '../../utils/saleCalc';
 import { printContent, generatePlotAgreement, generateInstallmentSchedule } from '../../utils/printUtils';
 import type { Sale, Customer, Plot, Installment, CompanySettings, Dealer } from '../../types';
 import { useScrollLock } from '../../hooks/useScrollLock';
@@ -159,11 +160,11 @@ export default function SalesList() {
 
     try {
       setLoadingActionId(sale.id);
-      let insts = await getCollection<Installment>('installments', [
+      const rawInsts = await getCollection<Installment>('installments', [
         where('saleId', '==', sale.id)
       ]);
-      insts = insts.sort((a, b) => a.installmentNumber - b.installmentNumber);
-      const html = generateInstallmentSchedule(sale, customer, plot, insts, company);
+      const cleanInsts = consolidateSaleInstallments(rawInsts);
+      const html = generateInstallmentSchedule(sale, customer, plot, cleanInsts, company);
       printContent(html, `Schedule-${sale.saleNumber || sale.id}`);
     } catch (err) {
       console.error(err);

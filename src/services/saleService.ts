@@ -2,6 +2,9 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  query,
+  where,
   writeBatch,
   Timestamp,
 } from 'firebase/firestore';
@@ -26,6 +29,7 @@ import type {
   Plot,
   Booking,
   Sale,
+  Installment,
   InstallmentRow,
   NomineeDetails,
   CustomerDocuments,
@@ -499,3 +503,143 @@ export async function saveSale(input: SaveSaleInput): Promise<SubmitServiceResul
     receiptNumber: saleNumber,
   };
 }
+
+/**
+ * Synchronizes and heals existing sales and installments in Firestore:
+ * 1. Removes any orphan or legacy 'down_payment' documents from the 'installments' collection
+ *    (or marks them paid if down payment was completed).
+ * 2. Merges legacy separate semi-annual installment rows into the 36 monthly rows
+ *    so the database matches the 36-month schedule specification.
+ */
+export async function healSalesAndInstallments(): Promise<{ healedSales: number; deletedDPDocs: number }> {
+  let healedSales = 0;
+  let deletedDPDocs = 0;
+
+  try {
+    const salesSnap = await getDocs(collection(db, 'sales'));
+    if (salesSnap.empty) return { healedSales: 0, deletedDPDocs: 0 };
+
+    for (const saleDoc of salesSnap.docs) {
+      const saleData = saleDoc.data() as Sale;
+      const saleId = saleDoc.id;
+      if (saleData.status === 'cancelled') continue;
+
+      const instSnap = await getDocs(
+        query(collection(db, 'installments'), where('saleId', '==', saleId))
+      );
+      if (instSnap.empty) continue;
+
+      const batch = writeBatch(db);
+      let batchHasWrites = false;
+
+      // 1. Remove/heal any down_payment installments
+      const dpDocs = instSnap.docs.filter(d => d.data().type === 'down_payment');
+      if (dpDocs.length > 0) {
+        const isComplete = saleData.downPaymentStatus === 'complete' ||
+          (saleData.downPaymentReceived || 0) >= (saleData.remainingDownPayment || 0) ||
+          saleData.remainingDownPayment === 0;
+
+        for (const dpDoc of dpDocs) {
+          if (isComplete) {
+            batch.delete(dpDoc.ref);
+            batchHasWrites = true;
+            deletedDPDocs++;
+          } else {
+            batch.update(dpDoc.ref, {
+              amountPaid: saleData.downPaymentReceived || 0,
+              status: (saleData.downPaymentReceived || 0) > 0 ? 'partial' : 'pending'
+            });
+            batchHasWrites = true;
+          }
+        }
+      }
+
+      // 2. Consolidate legacy 42 installments into 36 months if separate semi-annual rows exist
+      const regularDocs = instSnap.docs.filter(d => d.data().type !== 'down_payment' && d.data().type !== 'on_possession');
+      const monthlyDocs = regularDocs.filter(d => d.data().type === 'monthly');
+      const semiDocs = regularDocs.filter(d => d.data().type === 'semi_annual');
+
+      // If we have separate semi-annual docs alongside monthly docs (e.g. 36 monthly + 6 semi = 42 rows)
+      if (semiDocs.length > 0 && monthlyDocs.length > 0 && regularDocs.length > monthlyDocs.length) {
+        const toJsDate = (val: any): Date => {
+          if (!val) return new Date();
+          if (typeof val?.toDate === 'function') return val.toDate();
+          return new Date(val);
+        };
+
+        const sortedMonthly = [...monthlyDocs].sort((a, b) => {
+          const dateA = toJsDate(a.data().dueDate);
+          const dateB = toJsDate(b.data().dueDate);
+          return dateA.getTime() - dateB.getTime();
+        });
+
+        const remainingSemi = [...semiDocs];
+
+        sortedMonthly.forEach((mDoc, idx) => {
+          const mData = mDoc.data() as Installment;
+          const monthNumber = idx + 1;
+          const mDate = toJsDate(mData.dueDate);
+          const mKey = `${mDate.getFullYear()}-${mDate.getMonth()}`;
+
+          let matchIdx = remainingSemi.findIndex(s => {
+            const sDate = toJsDate(s.data().dueDate);
+            return `${sDate.getFullYear()}-${sDate.getMonth()}` === mKey;
+          });
+
+          if (matchIdx === -1 && monthNumber % 6 === 0 && remainingSemi.length > 0) {
+            matchIdx = 0;
+          }
+
+          if (matchIdx !== -1) {
+            const [matchedSemi] = remainingSemi.splice(matchIdx, 1);
+            const sData = matchedSemi.data() as Installment;
+            const combinedDue = (mData.amountDue || 0) + (sData.amountDue || 0);
+            const combinedPaid = (mData.amountPaid || 0) + (sData.amountPaid || 0);
+            const isPaid = combinedPaid >= combinedDue && combinedDue > 0;
+            const isPartial = combinedPaid > 0 && !isPaid;
+
+            const semiNote = `Includes Rs. ${(sData.amountDue || 0).toLocaleString('en-PK')} Semi-Annual Payment`;
+            const existingNote = mData.notes ? `${mData.notes}; ` : '';
+
+            batch.update(mDoc.ref, {
+              amountDue: combinedDue,
+              amountPaid: combinedPaid,
+              type: 'semi_annual',
+              installmentNumber: monthNumber,
+              totalInstallments: 36,
+              notes: existingNote ? `${existingNote}${semiNote}` : semiNote,
+              status: isPaid ? 'paid' : isPartial ? 'partial' : mData.status,
+            });
+
+            // Delete the separate semi-annual doc
+            batch.delete(matchedSemi.ref);
+            batchHasWrites = true;
+          } else {
+            batch.update(mDoc.ref, {
+              installmentNumber: monthNumber,
+              totalInstallments: 36,
+            });
+            batchHasWrites = true;
+          }
+        });
+
+        // Any leftover semi docs that didn't match get deleted
+        remainingSemi.forEach(s => {
+          batch.delete(s.ref);
+          batchHasWrites = true;
+        });
+
+        healedSales++;
+      }
+
+      if (batchHasWrites) {
+        await batch.commit();
+      }
+    }
+  } catch (err) {
+    console.error('Error during sales and installments healing:', err);
+  }
+
+  return { healedSales, deletedDPDocs };
+}
+

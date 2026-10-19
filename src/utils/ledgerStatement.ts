@@ -2,6 +2,7 @@ import {
   Customer, Sale, Plot, Installment, DownPaymentTransaction, Booking
 } from '../types';
 import { isInstallmentOverdue, daysOverdue, daysUntilDue, getOutstanding } from './formatters';
+import { consolidateSaleInstallments } from './saleCalc';
 
 export interface LedgerSaleBlock {
   saleId: string;
@@ -123,7 +124,6 @@ export const buildCustomerStatement = (
     const plot = plots.find(p => p.id === sale.plotId);
     const booking = bookings.find(b => b.id === sale.bookingId);
     const saleDPTxs = dpTransactions.filter(tx => tx.saleId === sale.id);
-    const saleInsts = installments.filter(i => i.saleId === sale.id);
 
     const sDate = new Date(sale.saleDate);
     const plotLabel = plot ? `${plot.plotNumber} - ${plot.block}` : 'Unknown Plot';
@@ -206,27 +206,27 @@ export const buildCustomerStatement = (
       });
     }
 
+    const rawSaleInsts = installments.filter(i => i.saleId === sale.id);
+    const saleInsts = consolidateSaleInstallments(rawSaleInsts);
+
     let instPaidSum = 0;
     let totalInstCount = 0;
     let paidInstCount = 0;
 
     saleInsts.forEach(inst => {
-      const isDP = inst.type === 'down_payment';
+      // Down payments are never part of regular installment schedule
+      if (inst.type === 'down_payment') return;
+
       const isPoss = inst.type === 'on_possession';
       const aDue = inst.amountDue || 0;
       const aPaid = inst.amountPaid || 0;
       
       // Credit for Installment
       if (aPaid > 0) {
-        // Skip double counting DP
-        if (isDP && hasDPTxs) {
-          // ignore credit
-        }
         // Skip double counting Possession
-        else if (isPoss && possessionPaidInSale) {
+        if (isPoss && possessionPaidInSale) {
           // ignore credit
-        } 
-        else {
+        } else {
           instPaidSum += aPaid;
           statementBase.push({
             id: `credit_inst_${inst.id}`,
@@ -242,7 +242,7 @@ export const buildCustomerStatement = (
       }
 
       // Add to rows schedule
-      if (!isDP && !isPoss) {
+      if (!isPoss) {
         totalInstCount++;
         if (aPaid >= aDue && aDue > 0) paidInstCount++;
       }
@@ -285,6 +285,14 @@ export const buildCustomerStatement = (
     const saleTotalReceived = bPaid + dpTxSum + instPaidSum + (possessionPaidInSale ? (sale.onPossessionAmount||0) : 0);
     globalTotalReceived += saleTotalReceived;
 
+    const dpTotalReq = sale.downPaymentAmount || sale.downPayment || 0;
+    const bPaidAmt = sale.bookingAmountPaid || 0;
+    const dpReceivedAmt = sale.downPaymentReceived || 0;
+    const dpStillPending = sale.remainingDownPayment !== undefined
+      ? sale.remainingDownPayment
+      : Math.max(0, dpTotalReq - bPaidAmt - dpReceivedAmt);
+    const isDPComplete = sale.downPaymentStatus === 'complete' || dpStillPending === 0;
+
     saleBlocks.push({
       saleId: sale.id,
       saleNumber: sale.saleNumber || '',
@@ -301,10 +309,10 @@ export const buildCustomerStatement = (
       finalPrice: fPrice,
       bookingPaid: bPaid,
       downPayment: {
-        expected: sale.downPaymentAmount || sale.downPayment || 0,
-        received: sale.downPaymentReceived || 0, // from sale doc directly
-        remaining: sale.remainingDownPayment || 0,
-        status: sale.downPaymentStatus || 'pending'
+        expected: dpTotalReq,
+        received: bPaidAmt + dpReceivedAmt,
+        remaining: isDPComplete ? 0 : dpStillPending,
+        status: isDPComplete ? 'complete' : (sale.downPaymentStatus || 'pending')
       },
       semiAnnual: {
         enabled: !!sale.semiAnnualEnabled,

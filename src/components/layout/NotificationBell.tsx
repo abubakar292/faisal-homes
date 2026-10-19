@@ -3,7 +3,8 @@ import { Bell, AlertCircle, Clock, DollarSign, ChevronRight } from 'lucide-react
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCollection } from '../../firebase/firestore';
-import { formatCurrency, isInstallmentOverdue } from '../../utils/formatters';
+import { formatCurrency, isInstallmentOverdue, getOutstanding } from '../../utils/formatters';
+import { healSalesAndInstallments } from '../../services/saleService';
 import type { Installment, Sale, Customer, Plot } from '../../types';
 
 interface Notification {
@@ -50,6 +51,8 @@ const NotificationBell: React.FC = () => {
         getCollection<Plot>('plots'),
       ]);
 
+      healSalesAndInstallments().catch(console.error);
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const in7Days = new Date(today);
@@ -59,8 +62,9 @@ const NotificationBell: React.FC = () => {
       const customerMap = new Map(customers.map(c => [c.id, c]));
       const plotMap = new Map(plots.map(p => [p.id, p]));
 
-      // 1. Overdue installments
+      // 1. Overdue installments (strictly exclude down payments)
       const overdueInsts = installments.filter(i => {
+        if (i.type === 'down_payment') return false;
         if (!isInstallmentOverdue(i)) return false;
         const sale = sales.find(s => s.id === i.saleId);
         if (sale?.status === 'cancelled') return false;
@@ -74,7 +78,7 @@ const NotificationBell: React.FC = () => {
         const key = inst.customerId;
         const existing = overdueByCustomer.get(key) || { count: 0, total: 0, name: c?.name || 'Unknown' };
         existing.count++;
-        existing.total += inst.amountDue;
+        existing.total += getOutstanding(inst);
         overdueByCustomer.set(key, existing);
       });
 
@@ -83,7 +87,7 @@ const NotificationBell: React.FC = () => {
           id: `overdue-${customerId}`,
           type: 'overdue',
           title: '🔴 Overdue Payments',
-          message: `${data.name} — ${data.count} installment${data.count > 1 ? 's' : ''} (Rs. ${formatCurrency(data.total)})`,
+          message: `${data.name} - ${data.count} installment${data.count > 1 ? 's' : ''} (${formatCurrency(data.total)})`,
           icon: <AlertCircle size={14} />,
           color: '#dc2626',
           route: '/reports/shortage-list',
@@ -102,12 +106,12 @@ const NotificationBell: React.FC = () => {
       });
 
       if (dueSoon.length > 0) {
-        const totalDueSoon = dueSoon.reduce((s, i) => s + i.amountDue, 0);
+        const totalDueSoon = dueSoon.reduce((s, i) => s + getOutstanding(i), 0);
         notifs.push({
           id: 'due-soon-all',
           type: 'due_soon',
           title: '⏰ Payments Due Soon',
-          message: `${dueSoon.length} installment${dueSoon.length > 1 ? 's' : ''} due within 7 days (Rs. ${formatCurrency(totalDueSoon)})`,
+          message: `${dueSoon.length} installment${dueSoon.length > 1 ? 's' : ''} due within 7 days (${formatCurrency(totalDueSoon)})`,
           icon: <Clock size={14} />,
           color: '#d97706',
           route: '/reports/pending',
@@ -121,7 +125,7 @@ const NotificationBell: React.FC = () => {
         if (s.downPaymentStatus === 'complete') return false;
         const totalRequired = s.downPaymentAmount || 0;
         const totalReceived = (s.bookingAmountPaid || 0) + (s.downPaymentReceived || 0);
-        const remaining = Math.max(0, totalRequired - totalReceived);
+        const remaining = s.remainingDownPayment !== undefined ? s.remainingDownPayment : Math.max(0, totalRequired - totalReceived);
         return remaining > 0;
       });
 
@@ -129,13 +133,14 @@ const NotificationBell: React.FC = () => {
         const totalPendingDP = pendingDP.reduce((s, sale) => {
           const totalRequired = sale.downPaymentAmount || 0;
           const totalReceived = (sale.bookingAmountPaid || 0) + (sale.downPaymentReceived || 0);
-          return s + Math.max(0, totalRequired - totalReceived);
+          const remaining = sale.remainingDownPayment !== undefined ? sale.remainingDownPayment : Math.max(0, totalRequired - totalReceived);
+          return s + remaining;
         }, 0);
         notifs.push({
           id: 'dp-pending-all',
           type: 'down_payment_pending',
           title: '📌 Down Payments Pending',
-          message: `${pendingDP.length} sale${pendingDP.length > 1 ? 's' : ''} with pending down payments (Rs. ${formatCurrency(totalPendingDP)})`,
+          message: `${pendingDP.length} sale${pendingDP.length > 1 ? 's' : ''} with pending down payments (${formatCurrency(totalPendingDP)})`,
           icon: <DollarSign size={14} />,
           color: '#0369a1',
           route: '/payments/down-payments',

@@ -70,6 +70,8 @@ const ShortageList: React.FC = () => {
     const rows: ShortageRow[] = [];
 
     installments.forEach(inst => {
+      // Down payments are managed separately, never as regular shortage installments
+      if (inst.type === 'down_payment') return;
       if (!isInstallmentOverdue(inst)) return;
 
       const sale = sales.find(s => s.id === inst.saleId);
@@ -85,7 +87,6 @@ const ShortageList: React.FC = () => {
       let instNum: string | number = inst.installmentNumber;
       if (inst.type === 'semi_annual')   instNum = 'Semi-Annual';
       if (inst.type === 'on_possession') instNum = 'Possession';
-      if (inst.type === 'down_payment')  instNum = 'Down Payment';
 
       rows.push({
         id: inst.id,
@@ -153,7 +154,7 @@ const ShortageList: React.FC = () => {
     else if (!phone.startsWith('92')) phone = '92' + phone;
 
     const dueDateStr = formatDate(row.dueDate);
-    const message = `Assalam-o-Alaikum ${row.customerName},\n\naapki Plot ${row.plotNumber} Block ${row.block} ki qist #${row.installmentNumber} Rs. ${formatCurrency(row.amountDue)} tarikh ${dueDateStr} ko due thi — ${row.daysDiff} din se overdue hain.\n\nMeherbani farma ke jald payment karein.\n\nFaisal Homes${company ? `: ${company.phone}` : ''}`;
+    const message = `Assalam-o-Alaikum ${row.customerName},\n\naapki Plot ${row.plotNumber} Block ${row.block} ki qist #${row.installmentNumber} ${formatCurrency(row.amountDue)} tarikh ${dueDateStr} ko due thi - ${row.daysDiff} din se overdue hain.\n\nMeherbani farma ke jald payment karein.\n\nFaisal Homes${company ? `: ${company.phone}` : ''}`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 

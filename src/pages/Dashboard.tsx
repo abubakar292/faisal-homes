@@ -61,21 +61,29 @@ const Dashboard: React.FC = () => {
   const availablePlots = plots.filter(p => p.status === 'available').length;
   const bookedPlots    = plots.filter(p => p.status === 'booked').length;
 
-  const totalCollection = installments
-    .filter(i => i.status === 'paid')
+  const activeSalesDocs = sales.filter(s => s.status !== 'cancelled');
+  const activeSaleIds = activeSalesDocs.map(s => s.id);
+
+  // Total collection includes: paid regular installments + booking amount paid + down payment received
+  const paidInstCollection = installments
+    .filter(i => i.status === 'paid' && i.type !== 'down_payment')
     .reduce((s, i) => s + (i.amountPaid || 0), 0);
+  const bookingCollection = activeSalesDocs.reduce((s, sale) => s + (sale.bookingAmountPaid || 0), 0);
+  const dpCollection = activeSalesDocs.reduce((s, sale) => s + (sale.downPaymentReceived || 0), 0);
+  const totalCollection = paidInstCollection + bookingCollection + dpCollection;
 
+  // Pending installments amount (strictly exclude down payments)
   const pendingAmount = installments
-    .filter(i => i.status === 'pending' || i.status === 'overdue')
-    .reduce((s, i) => s + (i.amountDue - (i.amountPaid || 0)), 0);
+    .filter(i => (i.status === 'pending' || i.status === 'overdue') && i.type !== 'down_payment' && activeSaleIds.includes(i.saleId))
+    .reduce((s, i) => s + getOutstanding(i), 0);
 
-  const activeSales = sales.filter(s => s.status !== 'cancelled').map(s => s.id);
-  const overdueInsts = installments.filter(i => activeSales.includes(i.saleId) && isInstallmentOverdue(i));
+  const overdueInsts = installments.filter(i => activeSaleIds.includes(i.saleId) && i.type !== 'down_payment' && isInstallmentOverdue(i));
   const overdueAmount = overdueInsts.reduce((s, i) => s + getOutstanding(i), 0);
 
   const now   = new Date();
   const next7 = addDays(now, 7);
   const upcoming = installments.filter(i =>
+    i.type !== 'down_payment' &&
     i.status === 'pending' && i.dueDate &&
     isAfter(new Date(i.dueDate), now) && isBefore(new Date(i.dueDate), next7)
   );

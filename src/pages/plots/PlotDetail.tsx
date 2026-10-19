@@ -5,6 +5,7 @@ import PageHeader from '../../components/ui/PageHeader';
 import StatusBadge from '../../components/ui/StatusBadge';
 import { getDocument, getCollection } from '../../firebase/firestore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { consolidateSaleInstallments } from '../../utils/saleCalc';
 import type { Plot, Sale, Customer, Installment } from '../../types';
 import { BrandLoader } from '../../components/brand';
 
@@ -25,7 +26,8 @@ const PlotDetail: React.FC = () => {
         setSale(s);
         getDocument<Customer>('customers', s.customerId).then(setCustomer);
         getCollection<Installment>('installments').then(insts => {
-          setInstallments(insts.filter(i => i.saleId === s.id).sort((a, b) => a.installmentNumber - b.installmentNumber));
+          const cleanInsts = consolidateSaleInstallments(insts.filter(i => i.saleId === s.id));
+          setInstallments(cleanInsts);
         });
       }
     });
@@ -33,7 +35,7 @@ const PlotDetail: React.FC = () => {
 
   if (!plot) return <BrandLoader />;
 
-  const paidAmount = installments.filter(i => i.status === 'paid').reduce((s, i) => s + i.amountPaid, 0);
+  const paidAmount = installments.filter(i => i.status === 'paid' && i.type !== 'down_payment').reduce((s, i) => s + (i.amountPaid || 0), 0);
 
   return (
     <div>

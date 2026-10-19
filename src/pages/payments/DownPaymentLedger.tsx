@@ -87,7 +87,7 @@ const DownPaymentLedger: React.FC = () => {
       <tr style="background:#fffbeb;">
         <td style="padding:5px 8px;">📌 Booking Amount</td>
         <td>Cash</td>
-        <td style="text-align:right;font-weight:bold;">Rs. ${formatCurrency(bookingPaid)}</td>
+        <td style="text-align:right;font-weight:bold;">${formatCurrency(bookingPaid)}</td>
         <td>${formatDate(sale.saleDate)}</td>
         <td style="color:#666;font-size:10px;">Auto-entry from booking</td>
       </tr>
@@ -98,8 +98,8 @@ const DownPaymentLedger: React.FC = () => {
       txRows += `
         <tr>
           <td style="padding:5px 8px;">✅ Down Payment Received</td>
-          <td>${tx.paymentMethod}${tx.bankName ? ` — ${tx.bankName}` : ''}</td>
-          <td style="text-align:right;font-weight:bold;color:#16a34a;">Rs. ${formatCurrency(tx.amount)}</td>
+          <td>${tx.paymentMethod}${tx.bankName ? ` - ${tx.bankName}` : ''}</td>
+          <td style="text-align:right;font-weight:bold;color:#16a34a;">${formatCurrency(tx.amount)}</td>
           <td>${formatDate(tx.paymentDate)}</td>
           <td style="color:#666;">${tx.notes || '—'}</td>
         </tr>
@@ -110,7 +110,7 @@ const DownPaymentLedger: React.FC = () => {
         <tr style="background:#fef2f2;">
           <td style="padding:5px 8px;color:#b91c1c;">⏳ Remaining Pending</td>
           <td>—</td>
-          <td style="text-align:right;font-weight:bold;color:#b91c1c;">Rs. ${formatCurrency(stillPending)}</td>
+          <td style="text-align:right;font-weight:bold;color:#b91c1c;">${formatCurrency(stillPending)}</td>
           <td>Due: ASAP</td>
           <td>—</td>
         </tr>
@@ -143,15 +143,15 @@ const DownPaymentLedger: React.FC = () => {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
         <div style="border:1px solid #e2e8f0;padding:8px;text-align:center;border-radius:4px;">
           <p style="font-size:9px;color:#666;">Total Down Payment</p>
-          <p style="font-weight:bold;color:#1a3c6e;">Rs. ${formatCurrency(totalDownPayment)}</p>
+          <p style="font-weight:bold;color:#1a3c6e;">${formatCurrency(totalDownPayment)}</p>
         </div>
         <div style="border:1px solid #e2e8f0;padding:8px;text-align:center;border-radius:4px;">
           <p style="font-size:9px;color:#666;">Received So Far</p>
-          <p style="font-weight:bold;color:#16a34a;">Rs. ${formatCurrency(bookingPaid + receivedSoFar)}</p>
+          <p style="font-weight:bold;color:#16a34a;">${formatCurrency(bookingPaid + receivedSoFar)}</p>
         </div>
         <div style="border:1px solid #e2e8f0;padding:8px;text-align:center;border-radius:4px;background:${stillPending > 0 ? '#fef2f2' : '#dcfce7'};">
           <p style="font-size:9px;color:#666;">Still Pending</p>
-          <p style="font-weight:bold;color:${stillPending > 0 ? '#b91c1c' : '#16a34a'};">Rs. ${formatCurrency(stillPending)}</p>
+          <p style="font-weight:bold;color:${stillPending > 0 ? '#b91c1c' : '#16a34a'};">${formatCurrency(stillPending)}</p>
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11px;">

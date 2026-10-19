@@ -288,3 +288,113 @@ export function buildInstallments(
 
   return allInsts;
 }
+
+/**
+ * Consolidates installments for a sale so that:
+ * 1. Down payments are NEVER included as installment rows.
+ * 2. Separate semi-annual installments (e.g. 42 rows) are merged into the corresponding
+ *    monthly row for month 6, 12, 18, 24, 30, 36, producing exactly 36 monthly rows.
+ * 3. Installment numbers are sequential (1..36) and totalInstallments is 36.
+ */
+export function consolidateSaleInstallments(rawList: Installment[]): Installment[] {
+  if (!rawList || !Array.isArray(rawList) || rawList.length === 0) return [];
+
+  // 1. Exclude any down payment rows completely
+  const validInsts = rawList.filter(i => i && i.type !== 'down_payment');
+
+  // Separate possession from regular installments
+  const possessionInsts = validInsts.filter(i => i.type === 'on_possession');
+  const regularInsts = validInsts.filter(i => i.type !== 'on_possession');
+
+  // Check if we have separate semi-annual rows that need to be merged
+  const monthlyList = regularInsts.filter(i => i.type === 'monthly');
+  const separateSemiList = regularInsts.filter(i => i.type === 'semi_annual');
+
+  let mergedRegular: Installment[] = [];
+
+  // If there are separate semi-annual rows alongside monthly rows (e.g. 36 monthly + 6 semi = 42 rows)
+  if (separateSemiList.length > 0 && monthlyList.length > 0 && regularInsts.length > monthlyList.length) {
+    // Sort monthly by due date or installmentNumber
+    const sortedMonthly = [...monthlyList].sort((a, b) => {
+      const timeA = new Date(a.dueDate).getTime();
+      const timeB = new Date(b.dueDate).getTime();
+      return timeA - timeB;
+    });
+
+    // Unmatched semi-annuals queue
+    const remainingSemi = [...separateSemiList];
+
+    mergedRegular = sortedMonthly.map((mInst, idx) => {
+      const monthNumber = idx + 1;
+      const mDate = new Date(mInst.dueDate);
+      const mKey = `${mDate.getFullYear()}-${mDate.getMonth()}`;
+
+      // Check if this month matches a semi-annual installment
+      // Matches either by month/year key or by being month 6, 12, 18, 24, 30, 36
+      let matchIdx = remainingSemi.findIndex(s => {
+        const sDate = new Date(s.dueDate);
+        return `${sDate.getFullYear()}-${sDate.getMonth()}` === mKey;
+      });
+
+      if (matchIdx === -1 && monthNumber % 6 === 0 && remainingSemi.length > 0) {
+        matchIdx = 0; // Take the next available semi-annual
+      }
+
+      if (matchIdx !== -1) {
+        const [matchedSemi] = remainingSemi.splice(matchIdx, 1);
+        const combinedDue = (mInst.amountDue || 0) + (matchedSemi.amountDue || 0);
+        const combinedPaid = (mInst.amountPaid || 0) + (matchedSemi.amountPaid || 0);
+        const isPaid = combinedPaid >= combinedDue && combinedDue > 0;
+        const isPartial = combinedPaid > 0 && !isPaid;
+
+        const semiNote = `Includes Rs. ${(matchedSemi.amountDue || 0).toLocaleString('en-PK')} Semi-Annual Payment`;
+        const existingNote = mInst.notes ? `${mInst.notes}; ` : '';
+
+        return {
+          ...mInst,
+          amountDue: combinedDue,
+          amountPaid: combinedPaid,
+          type: 'semi_annual' as const,
+          notes: existingNote ? `${existingNote}${semiNote}` : semiNote,
+          status: isPaid ? ('paid' as const) : isPartial ? ('partial' as const) : mInst.status,
+          paymentDate: isPaid ? (mInst.paymentDate || matchedSemi.paymentDate || new Date()) : (mInst.paymentDate || null),
+        };
+      }
+
+      return { ...mInst };
+    });
+
+    // If any unmatched semi-annual remains, append them
+    if (remainingSemi.length > 0) {
+      mergedRegular.push(...remainingSemi);
+    }
+  } else {
+    // Already combined or purely monthly / purely semi-annual
+    mergedRegular = [...regularInsts];
+  }
+
+  // Sort chronologically by dueDate
+  mergedRegular.sort((a, b) => {
+    const timeA = new Date(a.dueDate).getTime();
+    const timeB = new Date(b.dueDate).getTime();
+    return timeA - timeB;
+  });
+
+  const totalRegularCount = mergedRegular.length;
+  const totalCount = totalRegularCount + possessionInsts.length;
+
+  // Re-number 1..N
+  const finalRegular = mergedRegular.map((inst, idx) => ({
+    ...inst,
+    installmentNumber: idx + 1,
+    totalInstallments: totalCount,
+  }));
+
+  const finalPossession = possessionInsts.map((inst, idx) => ({
+    ...inst,
+    installmentNumber: totalRegularCount + idx + 1,
+    totalInstallments: totalCount,
+  }));
+
+  return [...finalRegular, ...finalPossession];
+}
