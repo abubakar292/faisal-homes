@@ -90,7 +90,7 @@ const AgreementRedirect: React.FC = () => {
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, loading } = useAuth();
   const [searchParams] = useSearchParams();
-  if (searchParams.get('demo3d') === '1') return <>{children}</>;
+  if (searchParams.get('demo') === '1' || searchParams.get('demo3d') === '1') return <>{children}</>;
   if (loading) return null;
   if (!currentUser) return <Navigate to="/login" replace />;
   return <>{children}</>;
@@ -99,7 +99,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // ─── App Inner ────────────────────────────────────────────────────────────────
 const AppInner: React.FC = () => {
   const { loading, currentUser } = useAuth();
-  const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo3d=1');
+  const isDemo =
+    typeof window !== 'undefined' &&
+    (window.location.search.includes('demo=1') || window.location.search.includes('demo3d=1'));
   const [splashDone, setSplashDone] = useState(isDemo);
   const [appMounted, setAppMounted] = useState(isDemo);
 

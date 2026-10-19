@@ -53,8 +53,8 @@ async function run() {
     assert(swResp.status() === 200, 'sw.js should return 200 OK');
     console.log('PWA ServiceWorker script verified: OK!');
 
-    // Back to app with demo3d=1 so Layout mounts
-    await page.goto('http://localhost:4173/plots/map?demo3d=1', { waitUntil: 'domcontentloaded' });
+    // Back to app with demo=1 so Layout mounts
+    await page.goto('http://localhost:4173/plots/map?demo=1', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1000);
 
     // Initial desktop sidebar: check width of aside

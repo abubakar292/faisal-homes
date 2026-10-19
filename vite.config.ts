@@ -12,7 +12,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          if (id.includes('node_modules/three') || id.includes('node_modules/@react-three')) return 'three';
           if (id.includes('node_modules/firebase')) return 'firebase';
           if (id.includes('node_modules/recharts')) return 'charts';
           if (id.includes('node_modules/jspdf')) return 'pdf';

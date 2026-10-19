@@ -139,11 +139,11 @@ export function useSoldCelebrations({
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchParams, navigate, location.pathname, enabled, plotElementsRef]);
+  }, [searchParams, enabled, navigate, location.pathname, plotElementsRef]);
 
   return {
     celebratingPlotIds,
     handleCelebrationEnd,
-    isBaseline: isBaselineRef.current,
+    setCelebratingPlotIds,
   };
 }
