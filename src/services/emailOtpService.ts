@@ -25,7 +25,7 @@ export function generateSecureOtp(): string {
 export async function sendEmailOtp(
   email: string,
   userId: string
-): Promise<{ success: boolean; message: string; devCode?: string }> {
+): Promise<{ success: boolean; message: string; error?: string }> {
   const code = generateSecureOtp();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes validity
@@ -55,30 +55,37 @@ export async function sendEmailOtp(
         templateId,
         {
           to_email: email,
+          email: email,
+          user_email: email,
+          recipient: email,
+          to_name: email.split('@')[0],
           otp_code: code,
+          passcode: code,
+          code: code,
+          otp: code,
           app_name: 'Faisal Homes',
           expiry_minutes: '10',
         },
         publicKey
       );
       return { success: true, message: `Security code sent to ${email}` };
-    } catch (err) {
+    } catch (err: any) {
       console.error('EmailJS send error:', err);
-      // Fallback dev notification so testing is never blocked
+      const detail = err?.text || err?.message || 'Failed to dispatch email';
       return {
-        success: true,
-        message: `Security code generated for ${email}`,
-        devCode: code,
+        success: false,
+        message: detail,
+        error: `Email delivery error: ${detail}. Please check your Template ID in EmailJS dashboard.`,
       };
     }
   }
 
-  // Development/demo mode when keys are not set
-  console.log(`[Faisal Homes Auth] 6-digit OTP for ${email} is: ${code}`);
+  // Warning when keys are not configured
+  console.warn('[Faisal Homes Auth] EmailJS environment variables are missing in .env');
   return {
-    success: true,
-    message: `Security code sent to ${email}`,
-    devCode: code,
+    success: false,
+    message: 'Email service is not configured.',
+    error: 'EmailJS credentials not found. Please ensure VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID, and VITE_EMAILJS_PUBLIC_KEY are set in your .env file and restart Vite dev server.',
   };
 }
 

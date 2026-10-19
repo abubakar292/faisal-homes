@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle, Shield, AlertCircle } from 'lucide-react';
 import gsap from 'gsap';
 import Logo from '../components/Logo';
+import toast from 'react-hot-toast';
 import OtpVerificationStep from '../components/auth/OtpVerificationStep';
 import { sendEmailOtp, verifyEmailOtp } from '../services/emailOtpService';
 
@@ -19,7 +20,6 @@ export default function Register() {
 
   const [step, setStep] = useState<'form' | 'otp'>('form');
   const [registeredUid, setRegisteredUid] = useState<string>('');
-  const [initialDevCode, setInitialDevCode] = useState<string | undefined>();
   
   const { createUser, loginWithGoogle, markEmailVerified } = useAuth();
   const navigate = useNavigate();
@@ -104,8 +104,10 @@ export default function Register() {
 
       // 2. Generate and send 6-digit OTP code to their real email
       const otpRes = await sendEmailOtp(email, uid);
-      if (otpRes.devCode) {
-        setInitialDevCode(otpRes.devCode);
+      if (!otpRes.success && otpRes.error) {
+        toast.error(otpRes.error, { duration: 6000 });
+      } else {
+        toast.success(`Security code sent to ${email}`);
       }
       setLoadingState('idle');
       setStep('otp');
@@ -136,7 +138,6 @@ export default function Register() {
       <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4">
         <OtpVerificationStep
           email={email}
-          initialDevCode={initialDevCode}
           onVerify={async (code) => {
             const res = await verifyEmailOtp(registeredUid, code);
             if (res.success) {

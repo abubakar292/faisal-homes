@@ -5,9 +5,8 @@ import toast from 'react-hot-toast';
 interface OtpVerificationStepProps {
   email: string;
   onVerify: (code: string) => Promise<{ success: boolean; error?: string }>;
-  onResend: () => Promise<{ success: boolean; message: string; devCode?: string }>;
+  onResend: () => Promise<{ success: boolean; message: string; error?: string }>;
   onBack: () => void;
-  initialDevCode?: string;
 }
 
 export const OtpVerificationStep: React.FC<OtpVerificationStepProps> = ({
@@ -15,14 +14,12 @@ export const OtpVerificationStep: React.FC<OtpVerificationStepProps> = ({
   onVerify,
   onResend,
   onBack,
-  initialDevCode,
 }) => {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(60);
   const [resending, setResending] = useState(false);
-  const [devCode, setDevCode] = useState<string | undefined>(initialDevCode);
   const [verifiedSuccess, setVerifiedSuccess] = useState(false);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -123,11 +120,11 @@ export const OtpVerificationStep: React.FC<OtpVerificationStepProps> = ({
       setError('');
       const res = await onResend();
       if (res.success) {
-        toast.success('New security code sent!');
+        toast.success(res.message || 'New security code sent to your email!');
         setCountdown(60);
-        if (res.devCode) {
-          setDevCode(res.devCode);
-        }
+      } else {
+        setError(res.error || res.message || 'Failed to resend code.');
+        toast.error(res.error || 'Failed to send security code');
       }
     } catch {
       toast.error('Failed to resend code. Please try again.');
@@ -168,16 +165,6 @@ export const OtpVerificationStep: React.FC<OtpVerificationStepProps> = ({
           {email}
         </span>
       </div>
-
-      {/* Dev helper banner */}
-      {devCode && (
-        <div className="mb-5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-center font-medium">
-          <span className="font-bold">Security OTP:</span>{' '}
-          <span className="font-mono text-sm font-extrabold tracking-widest text-[#1a3c6e] bg-white px-2 py-0.5 rounded border border-amber-300">
-            {devCode}
-          </span>
-        </div>
-      )}
 
       {error && (
         <div className="mb-5 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs text-center font-medium animate-shake">
