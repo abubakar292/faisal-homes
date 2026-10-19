@@ -43,10 +43,10 @@ export async function sendEmailOtp(
   // Save to Firestore
   await setDocument('otp_verifications', userId, otpData);
 
-  // EmailJS configuration
-  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-  const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+  // EmailJS configuration (reads from .env or uses configured project defaults)
+  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_88p3iod';
+  const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_fqey2dz';
+  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'PuGVLO-ewwjVhuCt_';
 
   if (serviceId && templateId && publicKey) {
     try {
