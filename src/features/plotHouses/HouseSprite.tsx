@@ -13,6 +13,7 @@ export interface HouseSpriteProps {
   variant: HouseVariant;
   palette: HousePalette;
   height?: number;
+  heightClass?: string;
   mode?: 'static' | 'build';
   onBuilt?: () => void;
   className?: string;
@@ -24,7 +25,8 @@ export const HouseSprite: React.FC<HouseSpriteProps> = ({
   plotId = 'plot',
   variant,
   palette,
-  height = 74,
+  height,
+  heightClass = 'h-[74px] sm:h-[82px]',
   mode = 'static',
   onBuilt,
   className = '',
@@ -35,7 +37,10 @@ export const HouseSprite: React.FC<HouseSpriteProps> = ({
   const manifest = HOUSE_SIZES[variant] || HOUSE_SIZES.small;
   const urls = spriteUrls(variant, palette);
 
-  const width = Math.round(height * manifest.aspect);
+  const sizeStyle: React.CSSProperties = height
+    ? { width: `${Math.round(height * manifest.aspect)}px`, height: `${height}px` }
+    : { aspectRatio: `${manifest.aspect}` };
+  const sizeClasses = height ? '' : `${heightClass} w-auto`;
 
   // Check user motion preference
   const prefersReducedMotion =
@@ -162,8 +167,8 @@ export const HouseSprite: React.FC<HouseSpriteProps> = ({
   if (!wantsToBuild || isBuilt) {
     return (
       <div
-        className={`relative inline-block pointer-events-none select-none ${className}`}
-        style={{ width: `${width}px`, height: `${height}px` }}
+        className={`relative inline-block pointer-events-none select-none ${sizeClasses} ${className}`}
+        style={sizeStyle}
       >
         <img
           src={urls.full}
@@ -174,7 +179,6 @@ export const HouseSprite: React.FC<HouseSpriteProps> = ({
           loading="lazy"
           onError={() => setLoadError(true)}
           className="w-full h-full object-contain pointer-events-none select-none block"
-          style={{ width: `${width}px`, height: `${height}px` }}
         />
       </div>
     );
@@ -183,8 +187,8 @@ export const HouseSprite: React.FC<HouseSpriteProps> = ({
   // Render build layers stacked
   return (
     <div
-      className={`relative inline-block pointer-events-none select-none overflow-visible ${className}`}
-      style={{ width: `${width}px`, height: `${height}px` }}
+      className={`relative inline-block pointer-events-none select-none overflow-visible ${sizeClasses} ${className}`}
+      style={sizeStyle}
     >
       {/* Soft pulse ring */}
       <div

@@ -345,27 +345,14 @@ const PlotMap: React.FC = () => {
                           {/* Sold Bungalow House Sprite */}
                           {isSold && enableHouses && (
                             <div className="absolute right-[2px] bottom-[2px] z-0 pointer-events-none select-none flex items-end justify-end">
-                              {/* Height is 74px on mobile (80 - 6), 82px on sm+ (88 - 6) */}
-                              <div className="block sm:hidden">
-                                <HouseSprite
-                                  plotId={plot.id}
-                                  variant={variant}
-                                  palette={palette}
-                                  height={74}
-                                  mode={isCelebrating ? 'build' : 'static'}
-                                  onBuilt={() => handleCelebrationEnd(plot.id)}
-                                />
-                              </div>
-                              <div className="hidden sm:block">
-                                <HouseSprite
-                                  plotId={plot.id}
-                                  variant={variant}
-                                  palette={palette}
-                                  height={82}
-                                  mode={isCelebrating ? 'build' : 'static'}
-                                  onBuilt={() => handleCelebrationEnd(plot.id)}
-                                />
-                              </div>
+                              <HouseSprite
+                                plotId={plot.id}
+                                variant={variant}
+                                palette={palette}
+                                heightClass="h-[74px] sm:h-[82px]"
+                                mode={isCelebrating ? 'build' : 'static'}
+                                onBuilt={() => handleCelebrationEnd(plot.id)}
+                              />
                             </div>
                           )}
                         </button>
