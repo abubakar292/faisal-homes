@@ -384,35 +384,35 @@ export default function SalesList() {
                   <div className="pt-3 flex flex-wrap items-center justify-between gap-1.5">
                     <button
                       onClick={() => setSelectedSale(sale)}
-                      className="flex-1 min-w-[70px] py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      className="flex-1 min-w-[70px] py-2.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
                       title="View Details"
                     >
-                      <Eye size={13} />
+                      <Eye size={15} />
                       <span>Details</span>
                     </button>
                     <button
                       onClick={() => handlePrintAgreement(sale)}
-                      className="flex-1 min-w-[70px] py-2 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      className="flex-1 min-w-[70px] py-2.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-blue-200"
                       title="Print Agreement"
                     >
-                      <FileText size={13} />
+                      <FileText size={15} />
                       <span>Agreement</span>
                     </button>
                     <button
                       onClick={() => handlePrintSchedule(sale)}
                       disabled={loadingActionId === sale.id}
-                      className="flex-1 min-w-[70px] py-2 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors disabled:opacity-50 cursor-pointer"
+                      className="flex-1 min-w-[70px] py-2.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer border border-emerald-200"
                       title="Print Schedule"
                     >
-                      <Printer size={13} />
+                      <Printer size={15} />
                       <span>Schedule</span>
                     </button>
                     <button
                       onClick={() => navigate(`/payments/receive?customerId=${sale.customerId}&saleId=${sale.id}`)}
-                      className="flex-1 min-w-[70px] py-2 px-2 bg-[#1a3c6e] hover:bg-[#0f2444] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      className="flex-1 min-w-[70px] py-2.5 px-2 bg-[#1a3c6e] hover:bg-[#0f2444] text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                       title="Receive Payment"
                     >
-                      <Receipt size={13} />
+                      <Receipt size={15} />
                       <span>Pay</span>
                     </button>
                   </div>
@@ -438,7 +438,7 @@ export default function SalesList() {
                 <th className="py-3 px-3">Remaining</th>
                 <th className="py-3 px-3">Plan</th>
                 <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-3 text-right">Actions</th>
+                <th className="py-3 px-3 text-right min-w-[195px]">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -539,51 +539,51 @@ export default function SalesList() {
 
                       {/* Actions */}
                       <td className="py-2.5 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1.5">
                           {/* View details */}
                           <button
                             onClick={() => setSelectedSale(sale)}
-                            className="p-1.5 hover:bg-slate-100 rounded-md text-slate-600 transition-colors"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
                             title="View Details"
                           >
-                            <Eye size={14} />
+                            <Eye size={16} />
                           </button>
 
                           {/* Print Agreement */}
                           <button
                             onClick={() => handlePrintAgreement(sale)}
-                            className="p-1.5 hover:bg-blue-50 rounded-md text-blue-600 transition-colors"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
                             title="Print Agreement"
                           >
-                            <FileText size={14} />
+                            <FileText size={16} />
                           </button>
 
                           {/* Print Schedule */}
                           <button
                             onClick={() => handlePrintSchedule(sale)}
                             disabled={loadingActionId === sale.id}
-                            className="p-1.5 hover:bg-emerald-50 rounded-md text-emerald-600 transition-colors disabled:opacity-50"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 shadow-xs transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
                             title="Print Installment Schedule"
                           >
-                            <Printer size={14} />
+                            <Printer size={16} />
                           </button>
 
                           {/* Customer Ledger */}
                           <button
                             onClick={() => navigate(`/reports/pending/customer/${sale.customerId}`)}
-                            className="p-1.5 hover:bg-amber-50 rounded-md text-amber-700 transition-colors"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
                             title="Open Customer Ledger"
                           >
-                            <BookOpen size={14} />
+                            <BookOpen size={16} />
                           </button>
 
                           {/* Receive Payment */}
                           <button
                             onClick={() => navigate(`/payments/receive?customerId=${sale.customerId}&saleId=${sale.id}`)}
-                            className="p-1.5 hover:bg-teal-50 rounded-md text-teal-700 transition-colors"
+                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#1a3c6e]/10 hover:bg-[#1a3c6e] text-[#1a3c6e] hover:text-white border border-[#1a3c6e]/20 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
                             title="Receive Payment"
                           >
-                            <Receipt size={14} />
+                            <Receipt size={16} />
                           </button>
                         </div>
                       </td>
