@@ -1,3 +1,4 @@
+import { buildLetterheadDocument } from './letterhead';
 import { printDocument } from './printDocument';
 import { formatCurrency, formatDate } from './formatters';
 import type { Booking, Customer, Plot, Sale, Installment, CompanySettings, DownPaymentTransaction } from '../types';
@@ -159,6 +160,10 @@ thead { display: table-header-group; } tr { page-break-inside: avoid; } .page-br
 // ─── CORE: Universal print function ──────────────────────────────────────────
 
 export function printInNewWindow(htmlContent: string, title: string = 'Print'): void {
+  if (htmlContent.includes('lh-doc') || htmlContent.trim().toLowerCase().startsWith('<!doctype')) {
+    void printDocument(htmlContent);
+    return;
+  }
   const shell = `<!DOCTYPE html>
 <html>
 <head>
@@ -172,10 +177,8 @@ export function printInNewWindow(htmlContent: string, title: string = 'Print'): 
   void printDocument(shell);
 }
 
-// Legacy alias — keep old callers working
+// Legacy alias - keep old callers working
 export const printContent = printInNewWindow;
-
-// ─── Company header helper ────────────────────────────────────────────────────
 
 function companyHeader(company: { name: string; address: string; phone: string }, rightText: string = '') {
   return `
@@ -192,69 +195,59 @@ function companyHeader(company: { name: string; address: string; phone: string }
 // ─── BOOKING RECEIPT ─────────────────────────────────────────────────────────
 
 export function generateBookingReceipt(booking: Booking, customer: Customer, plot: Plot, company: CompanySettings): string {
-  const content = `
-    ${companyHeader(company)}
-    <div class="doc-title-band">BOOKING RECEIPT</div>
+  const makeCopyContent = (copyLabel: string, isCustomerCopy = false) => `
+    <div style="margin-bottom:12px;">
+      <span class="lh-copy-tag${isCustomerCopy ? ' customer' : ''}">${copyLabel}</span>
+      <span style="float:right;font-size:9.5pt;color:#64748b;margin-top:2px;">Receipt #: <strong>${booking.receiptNumber}</strong> | Date: <strong>${fmtDate(booking.bookingDate)}</strong></span>
+      <div style="clear:both;"></div>
+    </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0;">
-      <div style="padding:12px;border-right:1px solid #e2e8f0;">
-        <div class="info-section-title" style="margin-bottom:8px;">CUSTOMER INFORMATION</div>
-        <table style="font-size:11px;">
-          <tr><td style="color:#666;padding:3px 0;width:70px;">Name:</td><td style="font-weight:bold;">${customer.name}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;">Father:</td><td>${customer.fatherName || '—'}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;">CNIC:</td><td>${customer.cnic}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;">Phone:</td><td>${customer.phone}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;vertical-align:top;">Address:</td><td>${customer.address}</td></tr>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
+        <div class="lh-info-title">Customer Information</div>
+        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
+          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Name:</td><td style="font-weight:bold;padding:3px 8px;">${customer.name}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Father:</td><td style="padding:3px 8px;">${customer.fatherName || '-'}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">CNIC:</td><td style="padding:3px 8px;">${customer.cnic}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Phone:</td><td style="padding:3px 8px;">${customer.phone}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;vertical-align:top;">Address:</td><td style="padding:3px 8px;">${customer.address}</td></tr>
         </table>
       </div>
-      <div style="padding:12px;">
-        <div class="info-section-title" style="margin-bottom:8px;">BOOKING DETAILS</div>
-        <table style="font-size:11px;">
-          <tr><td style="color:#666;padding:3px 0;width:70px;">Receipt#:</td><td style="font-weight:bold;">${booking.receiptNumber}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;">Date:</td><td>${fmtDate(booking.bookingDate)}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;">Plot #:</td><td style="font-weight:bold;color:#1a3c6e;">${plot.plotNumber}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;">Block:</td><td>${plot.block}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;">Size:</td><td>${plot.size} ${plot.sizeUnit}</td></tr>
-          <tr><td style="color:#666;padding:3px 0;">Category:</td><td>${plot.category}</td></tr>
+
+      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
+        <div class="lh-info-title">Booking Details</div>
+        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
+          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Project:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${company.name}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Plot #:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${plot.plotNumber}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Block:</td><td style="padding:3px 8px;">${plot.block}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Size:</td><td style="padding:3px 8px;">${plot.size} ${plot.sizeUnit}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Category:</td><td style="padding:3px 8px;">${plot.category}</td></tr>
         </table>
       </div>
     </div>
 
-    <div style="padding:12px;">
-      <div class="info-section-title" style="margin-bottom:8px;">PAYMENT DETAILS</div>
-      <table>
-        <tr style="background:#f0f7ff;"><td style="padding:7px 10px;">Total Plot Price:</td><td style="text-align:right;font-weight:bold;color:#1a3c6e;">${fmtAmt(booking.totalPrice)}</td></tr>
-        <tr><td style="padding:7px 10px;">Booking Amount Received:</td><td style="text-align:right;font-weight:bold;font-size:13px;color:#1a3c6e;">${fmtAmt(booking.bookingAmount)}</td></tr>
-        <tr style="background:#f0f7ff;"><td style="padding:7px 10px;">Payment Method:</td><td style="text-align:right;">${booking.paymentMethod}${booking.bankName ? ` (${booking.bankName})` : ''}</td></tr>
-        <tr><td style="padding:7px 10px;">Balance Remaining:</td><td style="text-align:right;font-weight:bold;color:#dc2626;">${fmtAmt(booking.totalPrice - booking.bookingAmount)}</td></tr>
+    <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;margin-bottom:12px;">
+      <div class="lh-info-title">Payment Details</div>
+      <table class="lh-table" style="margin-bottom:0;">
+        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Total Plot Price:</td><td style="text-align:right;font-weight:bold;color:#1a3c6e;">${fmtAmt(booking.totalPrice)}</td></tr>
+        <tr><td style="padding:6px 10px;">Booking Amount Received:</td><td style="text-align:right;font-weight:bold;font-size:11.5pt;color:#1a3c6e;">${fmtAmt(booking.bookingAmount)}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Payment Method:</td><td style="text-align:right;">${booking.paymentMethod}${booking.bankName ? ` (${booking.bankName})` : ''}</td></tr>
+        <tr><td style="padding:6px 10px;">Balance Remaining:</td><td style="text-align:right;font-weight:bold;color:#dc2626;">${fmtAmt(booking.totalPrice - booking.bookingAmount)}</td></tr>
       </table>
     </div>
 
-    <div style="background:#1a3c6e;color:white;padding:8px 12px;font-size:10px;text-align:center;">
+    <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;padding:8px 12px;font-size:9.5pt;text-align:center;color:#334155;margin-bottom:10px;">
       This receipt confirms your booking. Plot will be reserved upon receipt of payment.
     </div>
-
-    <div class="signature-area">
-      <div>Received By:<div class="sig-line"></div></div>
-      <div><div class="stamp-box">STAMP</div></div>
-      <div style="text-align:right;">Customer Sign:<div class="sig-line"></div></div>
-    </div>
   `;
 
-  return `
-    <div class="receipt-copy">
-      <div class="copy-header" style="background:#1a3c6e;"><span class="copy-label">📋 OFFICE COPY</span><span>${fmtDate(new Date())}</span></div>
-      <div class="copy-body">${content}</div>
-    </div>
-    <div class="cut-line">✂ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─</div>
-    <div class="receipt-copy">
-      <div class="copy-header" style="background:#0d9488;"><span class="copy-label">👤 CUSTOMER COPY</span><span>${fmtDate(new Date())}</span></div>
-      <div class="copy-body">${content}</div>
-    </div>
-  `;
+  return buildLetterheadDocument({
+    sections: [
+      { title: 'Booking Form', bodyHtml: makeCopyContent('Office Copy', false) },
+      { title: 'Booking Form', bodyHtml: makeCopyContent('Customer Copy', true) }
+    ]
+  });
 }
-
-// ─── PAYMENT RECEIPT (3 copies) ──────────────────────────────────────────────
 
 export function generatePaymentReceipt(
   payment: Installment,
@@ -264,142 +257,151 @@ export function generatePaymentReceipt(
   remainingBalance: number,
   totalPaidSoFar: number
 ): string {
-  const typeLabel = payment.type === 'down_payment' ? 'Down Payment'
-    : payment.type === 'semi_annual' ? '⭐ Semi-Annual'
-    : payment.type === 'on_possession' ? 'On Possession'
+  const isPossession = payment.type === 'on_possession';
+  const isDownPayment = payment.type === 'down_payment';
+  const title = isPossession ? 'On-Possession Receipt' : (isDownPayment ? 'Down Payment Receipt' : 'Payment Receipt');
+
+  const typeLabel = isDownPayment ? 'Down Payment'
+    : payment.type === 'semi_annual' ? 'Semi-Annual'
+    : isPossession ? 'On Possession'
     : `Installment #${payment.installmentNumber} of ${payment.totalInstallments}`;
 
-  const copyContent = (copyType: string, headerBg: string) => `
-    <div class="receipt-copy">
-      <div class="copy-header" style="background:${headerBg};">
-        <span class="copy-label">${copyType}</span>
-        <span>${company.name} | Receipt# ${payment.receiptNumber}</span>
-      </div>
-      <div class="copy-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #eee;padding-bottom:6px;margin-bottom:6px;">
-          <div>
-            <div style="font-weight:bold;font-size:11px;">${customer.name}</div>
-            <div style="color:#666;font-size:9px;">${customer.customerId} | ${customer.phone}</div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-weight:bold;">Plot ${plot.plotNumber}, Block ${plot.block}</div>
-            <div style="color:#666;font-size:9px;">${typeLabel}</div>
-          </div>
-        </div>
-        <div class="copy-row"><span>Date:</span><span>${fmtDate(payment.paymentDate || new Date())}</span></div>
-        <div class="copy-row"><span>Due Date:</span><span>${fmtDate(payment.dueDate)}</span></div>
-        <div class="copy-row"><span>Amount Received:</span><span style="font-weight:bold;">${fmtAmt(payment.amountPaid)}</span></div>
-        <div class="copy-row"><span>Payment Method:</span><span>${payment.paymentMethod}${payment.bankName ? ` — ${payment.bankName}` : ''}</span></div>
-        <div class="copy-row"><span>Total Paid To Date:</span><span>${fmtAmt(totalPaidSoFar)}</span></div>
-        <div class="remaining-highlight">
-          <span>REMAINING BALANCE:</span>
-          <span>${fmtAmt(remainingBalance)}</span>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 60px 1fr;border-top:1px solid #eee;padding-top:8px;margin-top:4px;font-size:9px;">
-          <div>Received By:<div class="sig-line" style="width:90px;"></div></div>
-          <div><div class="stamp-box" style="height:40px;font-size:8px;">Stamp</div></div>
-          <div style="text-align:right;">Customer Sign:<div class="sig-line" style="width:90px;margin-left:auto;"></div></div>
-        </div>
-      </div>
+  const makeCopy = (copyLabel: string, isCustomerCopy = false) => `
+    <div style="margin-bottom:12px;">
+      <span class="lh-copy-tag${isCustomerCopy ? ' customer' : ''}">${copyLabel}</span>
+      <span style="float:right;font-size:9.5pt;color:#64748b;margin-top:2px;">Receipt #: <strong>${payment.receiptNumber}</strong> | Date: <strong>${fmtDate(payment.paymentDate || new Date())}</strong></span>
+      <div style="clear:both;"></div>
     </div>
-  `;
 
-  return `
-    ${copyContent('📋 OFFICE COPY', '#1a3c6e')}
-    <div class="cut-line">✂ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─</div>
-    ${copyContent('📋 OFFICE COPY', '#1a3c6e')}
-    <div class="cut-line">✂ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─</div>
-    ${copyContent('👤 CUSTOMER COPY', '#0d9488')}
-  `;
-}
-
-// ─── PLOT AGREEMENT ──────────────────────────────────────────────────────────
-
-export function generatePlotAgreement(sale: Sale, customer: Customer, plot: Plot, company: CompanySettings): string {
-  const nom = customer.nominee || {};
-  return `
-    ${companyHeader(company, `Agreement# ${sale.saleNumber}<br>Date: ${fmtDate(sale.saleDate)}`)}
-    <div class="doc-title-band">PLOT SALE AGREEMENT</div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0;">
-      <div style="padding:12px;border-right:1px solid #e2e8f0;">
-        <div class="info-section-title" style="margin-bottom:8px;">BUYER DETAILS</div>
-        <table style="font-size:10px;">
-          <tr><td style="color:#666;padding:2px 0;width:60px;">Name:</td><td style="font-weight:bold;">${customer.name}</td></tr>
-          <tr><td style="color:#666;padding:2px 0;">Father:</td><td>${customer.fatherName || '—'}</td></tr>
-          <tr><td style="color:#666;padding:2px 0;">CNIC:</td><td>${customer.cnic}</td></tr>
-          <tr><td style="color:#666;padding:2px 0;">Phone:</td><td>${customer.phone}</td></tr>
-          <tr><td style="color:#666;padding:2px 0;vertical-align:top;">Address:</td><td>${customer.address}</td></tr>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
+        <div class="lh-info-title">Customer Information</div>
+        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
+          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Name:</td><td style="font-weight:bold;padding:3px 8px;">${customer.name}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">ID:</td><td style="padding:3px 8px;">${customer.customerId}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Phone:</td><td style="padding:3px 8px;">${customer.phone}</td></tr>
         </table>
       </div>
-      <div style="padding:12px;">
-        <div class="info-section-title" style="margin-bottom:8px;">NOMINEE DETAILS</div>
-        <table style="font-size:10px;">
-          <tr><td style="color:#666;padding:2px 0;width:60px;">Name:</td><td style="font-weight:bold;">${(nom as {nomineeName?:string}).nomineeName || '—'}</td></tr>
-          <tr><td style="color:#666;padding:2px 0;">Relation:</td><td>${(nom as {nomineeRelation?:string}).nomineeRelation || '—'}</td></tr>
-          <tr><td style="color:#666;padding:2px 0;">CNIC:</td><td>${(nom as {nomineeCnic?:string}).nomineeCnic || '—'}</td></tr>
-          <tr><td style="color:#666;padding:2px 0;">Phone:</td><td>${(nom as {nomineePhone?:string}).nomineePhone || '—'}</td></tr>
+
+      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
+        <div class="lh-info-title">Plot Details</div>
+        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
+          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Project:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${company.name}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Plot #:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${plot.plotNumber}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Block:</td><td style="padding:3px 8px;">${plot.block}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Payment Type:</td><td style="padding:3px 8px;font-weight:bold;">${typeLabel}</td></tr>
         </table>
       </div>
     </div>
 
-    <div style="padding:10px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
-      <div class="info-section-title" style="margin-bottom:6px;">PLOT DETAILS</div>
-      <div style="display:flex;gap:20px;font-size:11px;">
-        <span><strong style="color:#1a3c6e;">Plot #${plot.plotNumber}</strong></span>
-        <span>Block: <strong>${plot.block}</strong></span>
-        <span>Size: <strong>${plot.size} ${plot.sizeUnit}</strong></span>
-        <span>Category: <strong>${plot.category}</strong></span>
-        <span>Location: <strong>${plot.location || 'Faisal Homes'}</strong></span>
-      </div>
-    </div>
-
-    <div style="padding:10px;">
-      <div class="info-section-title" style="margin-bottom:6px;">FINANCIAL DETAILS</div>
-      <table>
-        <tr><td style="padding:5px 8px;">Total Sale Price:</td><td style="text-align:right;font-weight:bold;color:#1a3c6e;">${fmtAmt(sale.totalPrice)}</td></tr>
-        <tr style="background:#f8fafc;"><td style="padding:5px 8px;">Down Payment (${sale.downPaymentPercent}%):</td><td style="text-align:right;font-weight:bold;">${fmtAmt(sale.downPaymentAmount)}</td></tr>
-        <tr><td style="padding:3px 8px 3px 20px;color:#666;font-size:10px;">└ Booking Amount (included):</td><td style="text-align:right;color:#666;font-size:10px;">${fmtAmt(sale.bookingAmountPaid)}</td></tr>
-        <tr style="background:#fffbeb;"><td style="padding:3px 8px 3px 20px;color:#b45309;font-size:10px;">└ Remaining Down Payment Due:</td><td style="text-align:right;color:#b45309;font-weight:bold;font-size:10px;">${fmtAmt(sale.remainingDownPayment)}</td></tr>
-        <tr style="background:#f8fafc;"><td style="padding:5px 8px;">Balance for Installments:</td><td style="text-align:right;font-weight:bold;color:#1a3c6e;">${fmtAmt(sale.remainingAmount)}</td></tr>
-        ${sale.onPossessionEnabled ? `<tr><td style="padding:5px 8px;">On-Possession Amount:</td><td style="text-align:right;font-weight:bold;">${fmtAmt(sale.onPossessionAmount)}</td></tr>` : ''}
+    <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;margin-bottom:12px;">
+      <div class="lh-info-title">Payment Transaction</div>
+      <table class="lh-table" style="margin-bottom:0;">
+        <tr><td style="padding:6px 10px;">Due Date:</td><td style="text-align:right;">${fmtDate(payment.dueDate)}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Amount Received:</td><td style="text-align:right;font-weight:bold;font-size:12pt;color:#1a3c6e;">${fmtAmt(payment.amountPaid)}</td></tr>
+        <tr><td style="padding:6px 10px;">Payment Method:</td><td style="text-align:right;">${payment.paymentMethod}${payment.bankName ? ` - ${payment.bankName}` : ''}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Total Paid To Date:</td><td style="text-align:right;font-weight:bold;color:#16a34a;">${fmtAmt(totalPaidSoFar)}</td></tr>
+        <tr><td style="padding:6px 10px;font-weight:bold;">Remaining Balance:</td><td style="text-align:right;font-weight:bold;font-size:11pt;color:#dc2626;">${fmtAmt(remainingBalance)}</td></tr>
       </table>
     </div>
 
-    <div style="padding:10px;border-top:1px solid #e2e8f0;">
-      <div class="info-section-title" style="margin-bottom:6px;">TERMS & CONDITIONS</div>
+    <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;padding:8px 12px;font-size:9.5pt;text-align:center;color:#334155;">
+      This receipt is an official acknowledgment of payment received.
+    </div>
+  `;
+
+  return buildLetterheadDocument({
+    sections: [
+      { title, bodyHtml: makeCopy('Office Copy', false) },
+      { title, bodyHtml: makeCopy('Accounts Copy', false) },
+      { title, bodyHtml: makeCopy('Customer Copy', true) }
+    ]
+  });
+}
+
+export function generatePlotAgreement(sale: Sale, customer: Customer, plot: Plot, company: CompanySettings): string {
+  const nom = customer.nominee || {};
+
+  const agreementBody = `
+    <div style="margin-bottom:12px;text-align:right;font-size:9.5pt;color:#64748b;">
+      Agreement #: <strong>${sale.saleNumber}</strong> | Date: <strong>${fmtDate(sale.saleDate)}</strong>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
+        <div class="lh-info-title">Buyer Details</div>
+        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
+          <tr><td style="color:#64748b;padding:3px 8px;width:70px;">Name:</td><td style="font-weight:bold;padding:3px 8px;">${customer.name}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Father:</td><td style="padding:3px 8px;">${customer.fatherName || '-'}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">CNIC:</td><td style="padding:3px 8px;">${customer.cnic}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Phone:</td><td style="padding:3px 8px;">${customer.phone}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;vertical-align:top;">Address:</td><td style="padding:3px 8px;">${customer.address}</td></tr>
+        </table>
+      </div>
+
+      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
+        <div class="lh-info-title">Nominee Details</div>
+        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
+          <tr><td style="color:#64748b;padding:3px 8px;width:70px;">Name:</td><td style="font-weight:bold;padding:3px 8px;">${(nom as {nomineeName?:string}).nomineeName || '-'}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Relation:</td><td style="padding:3px 8px;">${(nom as {nomineeRelation?:string}).nomineeRelation || '-'}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">CNIC:</td><td style="padding:3px 8px;">${(nom as {nomineeCnic?:string}).nomineeCnic || '-'}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Phone:</td><td style="padding:3px 8px;">${(nom as {nomineePhone?:string}).nomineePhone || '-'}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;margin-bottom:12px;">
+      <div class="lh-info-title">Plot Details</div>
+      <table class="lh-table" style="margin-bottom:0;">
+        <tr>
+          <td style="padding:6px 10px;width:25%;">Project: <strong>${company.name}</strong></td>
+          <td style="padding:6px 10px;width:25%;">Plot #: <strong style="color:#1a3c6e;">${plot.plotNumber}</strong></td>
+          <td style="padding:6px 10px;width:25%;">Block: <strong>${plot.block}</strong></td>
+          <td style="padding:6px 10px;width:25%;">Size: <strong>${plot.size} ${plot.sizeUnit}</strong></td>
+        </tr>
+        <tr style="background:#f8fafc;">
+          <td colspan="2" style="padding:6px 10px;">Category: <strong>${plot.category}</strong></td>
+          <td colspan="2" style="padding:6px 10px;">Location: <strong>${plot.location || 'Faisal Homes'}</strong></td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;margin-bottom:12px;">
+      <div class="lh-info-title">Financial Details</div>
+      <table class="lh-table" style="margin-bottom:0;">
+        <tr><td style="padding:6px 10px;">Total Sale Price:</td><td style="text-align:right;font-weight:bold;color:#1a3c6e;">${fmtAmt(sale.totalPrice)}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Down Payment (${sale.downPaymentPercent}%):</td><td style="text-align:right;font-weight:bold;">${fmtAmt(sale.downPaymentAmount)}</td></tr>
+        <tr><td style="padding:4px 10px 4px 24px;color:#64748b;font-size:9.5pt;">Booking Amount (included):</td><td style="text-align:right;color:#64748b;font-size:9.5pt;">${fmtAmt(sale.bookingAmountPaid)}</td></tr>
+        <tr style="background:#fffbeb;"><td style="padding:4px 10px 4px 24px;color:#b45309;font-size:9.5pt;">Remaining Down Payment Due:</td><td style="text-align:right;color:#b45309;font-weight:bold;font-size:9.5pt;">${fmtAmt(sale.remainingDownPayment)}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Balance for Installments:</td><td style="text-align:right;font-weight:bold;color:#1a3c6e;">${fmtAmt(sale.remainingAmount)}</td></tr>
+        ${sale.onPossessionEnabled ? `<tr><td style="padding:6px 10px;">On-Possession Amount:</td><td style="text-align:right;font-weight:bold;">${fmtAmt(sale.onPossessionAmount)}</td></tr>` : ''}
+      </table>
+    </div>
+  `;
+
+  const termsBody = `
+    <div style="font-size:10.5pt;line-height:1.7;color:#334155;padding:10px 0;">
       ${company.termsAndConditions ? `
-        <div class="terms-content" style="font-size:10px;line-height:1.7;color:#444;white-space:pre-wrap;">
-          ${company.termsAndConditions}
-        </div>
+        <div style="white-space:pre-wrap;">${company.termsAndConditions}</div>
       ` : `
-        <ol style="padding-left:16px;font-size:10px;line-height:1.7;color:#444;">
-          <li>The buyer agrees to pay installments as per the schedule provided separately.</li>
-          <li>Possession will be given upon completion of all payments as per agreement.</li>
-          <li>Any default in payment may result in cancellation of this agreement.</li>
-          <li>The remaining down payment must be cleared before installments commence.</li>
-          <li>This agreement is governed by the laws of Pakistan.</li>
+        <ol style="padding-left:20px;margin:0;">
+          <li style="margin-bottom:8px;">The buyer agrees to pay installments strictly as per the installment plan schedule provided separately.</li>
+          <li style="margin-bottom:8px;">Physical possession of the plot will be handed over upon full payment and clearance of all dues as per agreement.</li>
+          <li style="margin-bottom:8px;">Any default or continuous delay in installment payments may result in cancellation or surcharge as per company rules.</li>
+          <li style="margin-bottom:8px;">The remaining down payment must be cleared in full before monthly installment plan commencement.</li>
+          <li style="margin-bottom:8px;">This agreement is binding and governed by the applicable laws of Pakistan.</li>
         </ol>
       `}
     </div>
-
-    <div class="signature-area">
-      <div>
-        <div style="font-weight:bold;margin-bottom:20px;">BUYER SIGN:</div>
-        <div class="sig-line" style="width:150px;"></div>
-        <div style="margin-top:4px;font-size:9px;">${customer.name}</div>
-      </div>
-      <div><div class="stamp-box">[OFFICIAL STAMP]</div></div>
-      <div style="text-align:right;">
-        <div style="font-weight:bold;margin-bottom:20px;">SELLER SIGN:</div>
-        <div class="sig-line" style="width:150px;margin-left:auto;"></div>
-        <div style="margin-top:4px;font-size:9px;">${company.name}</div>
-      </div>
-    </div>
   `;
-}
 
-// ─── INSTALLMENT SCHEDULE ────────────────────────────────────────────────────
+  return buildLetterheadDocument({
+    sections: [
+      { title: 'Plot Sale Agreement', bodyHtml: agreementBody },
+      { title: 'Policies, Terms & Conditions', bodyHtml: termsBody }
+    ]
+  });
+}
 
 export function generateScheduleHTML(
   sale: Sale,
@@ -414,99 +416,88 @@ export function generateScheduleHTML(
   const pendingTotal = pending.reduce((sum, s) => sum + (s.amountDue || 0), 0);
 
   const statusBadge = (entry: Installment) => {
-    if (entry.status === 'paid') return `<span class="status-paid">✅ Paid</span>`;
-    if (entry.status === 'cancelled') return `<span class="status-overdue">❌ Cancelled</span>`;
-    
+    if (entry.status === 'paid') return '<span style="color:#16a34a;font-weight:bold;">Paid</span>';
+    if (entry.status === 'cancelled') return '<span style="color:#dc2626;font-weight:bold;">Cancelled</span>';
+
     const due = new Date(entry.dueDate);
     if (due < new Date()) {
-      let label = '🔴 Overdue';
-      if (entry.type === 'semi_annual') label = '🔴 Overdue (Semi-Annual)';
-      if (entry.type === 'down_payment') label = '🔴 Overdue (Down Payment)';
-      if (entry.type === 'on_possession') label = '🔴 Overdue (Possession)';
-      return `<span class="status-overdue">${label}</span>`;
+      let label = 'Overdue';
+      if (entry.type === 'semi_annual') label = 'Overdue (Semi-Annual)';
+      if (entry.type === 'down_payment') label = 'Overdue (Down Payment)';
+      if (entry.type === 'on_possession') label = 'Overdue (Possession)';
+      return `<span style="color:#dc2626;font-weight:bold;">${label}</span>`;
     }
-    
-    if (entry.type === 'on_possession') return `<span class="status-possession">🏠 On Possession</span>`;
-    if (entry.type === 'semi_annual') return `<span class="status-semi">⭐ Semi-Annual</span>`;
-    if (entry.type === 'down_payment') return `<span class="status-downpayment">📌 Down Payment</span>`;
-    return `<span class="status-pending">⏳ Pending</span>`;
+
+    if (entry.type === 'on_possession') return '<span style="color:#0284c7;font-weight:bold;">On Possession</span>';
+    if (entry.type === 'semi_annual') return '<span style="color:#d97706;font-weight:bold;">Semi-Annual</span>';
+    if (entry.type === 'down_payment') return '<span style="color:#9333ea;font-weight:bold;">Down Payment</span>';
+    return '<span style="color:#64748b;">Pending</span>';
   };
 
   const numLabel = (entry: Installment) => {
     if (entry.type === 'down_payment') return 'DP';
-    if (entry.type === 'semi_annual') return '⭐';
-    if (entry.type === 'on_possession') return '🏠';
+    if (entry.type === 'semi_annual') return 'SA';
+    if (entry.type === 'on_possession') return 'Poss.';
     return String(entry.installmentNumber);
   };
 
   const row = (entry: Installment) => `
     <tr>
-      <td style="text-align:center;">${numLabel(entry)}</td>
+      <td style="text-align:center;font-weight:bold;">${numLabel(entry)}</td>
       <td>${fmtDate(entry.dueDate)}</td>
-      <td class="amount-col">${fmtAmt(entry.amountDue)}</td>
-      <td>${statusBadge(entry)}</td>
-      <td>${entry.status === 'paid' ? fmtDate(entry.paymentDate) : '—'}</td>
+      <td style="text-align:right;font-weight:bold;">${fmtAmt(entry.amountDue)}</td>
+      <td style="text-align:center;">${statusBadge(entry)}</td>
+      <td style="text-align:center;">${entry.status === 'paid' ? fmtDate(entry.paymentDate) : '-'}</td>
     </tr>
   `;
 
-  const useTwoCol = schedule.length > 24;
-  const half = Math.ceil(schedule.length / 2);
-  const thead = `<thead><tr><th style="width:35px;">#</th><th>Due Date</th><th style="text-align:right;">Amount</th><th>Status</th><th>Paid Date</th></tr></thead>`;
+  const thead = `<thead><tr style="background:#f1f5f9;"><th style="width:40px;text-align:center;">#</th><th>Due Date</th><th style="text-align:right;">Amount</th><th style="text-align:center;">Status</th><th style="text-align:center;">Paid Date</th></tr></thead>`;
 
-  const tableHTML = useTwoCol ? `
-    <div class="two-col-table">
-      <table>${thead}<tbody>${schedule.slice(0, half).map(row).join('')}</tbody></table>
-      <table>${thead}<tbody>${schedule.slice(half).map(row).join('')}</tbody></table>
+  const content = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div style="border:1px solid #cbd5e1;border-radius:4px;padding:8px;">
+        <div style="font-size:8.5pt;color:#64748b;text-transform:uppercase;font-weight:bold;">Customer</div>
+        <div style="font-weight:bold;font-size:10.5pt;color:#1a3c6e;margin-top:2px;">${customer.name}</div>
+        <div style="font-size:9pt;color:#64748b;">${customer.customerId} | ${customer.phone}</div>
+      </div>
+      <div style="border:1px solid #cbd5e1;border-radius:4px;padding:8px;">
+        <div style="font-size:8.5pt;color:#64748b;text-transform:uppercase;font-weight:bold;">Plot Details</div>
+        <div style="font-weight:bold;font-size:10.5pt;color:#1a3c6e;margin-top:2px;">${plot.plotNumber}, Block ${plot.block}</div>
+        <div style="font-size:9pt;color:#64748b;">${plot.size} ${plot.sizeUnit} | ${plot.category}</div>
+      </div>
+      <div style="border:1px solid #cbd5e1;border-radius:4px;padding:8px;">
+        <div style="font-size:8.5pt;color:#64748b;text-transform:uppercase;font-weight:bold;">Plan Overview</div>
+        <div style="font-weight:bold;font-size:10.5pt;color:#1a3c6e;margin-top:2px;">${fmtAmt(sale.totalPrice)}</div>
+        <div style="font-size:9pt;color:#dc2626;">Remaining: ${fmtAmt(pendingTotal)}</div>
+      </div>
     </div>
-  ` : `
-    <table>
+
+    <table class="lh-table">
       ${thead}
-      <tbody>${schedule.map(row).join('')}</tbody>
-      <tr class="subtotal-row"><td colspan="2" style="padding:5px 8px;">TOTAL PAID</td><td class="amount-col">${fmtAmt(paidTotal)}</td><td colspan="2">${paid.length} installments</td></tr>
-      <tr class="total-row"><td colspan="2" style="padding:5px 8px;">REMAINING BALANCE</td><td class="amount-col">${fmtAmt(pendingTotal)}</td><td colspan="2">${pending.length} installments</td></tr>
+      <tbody>
+        ${schedule.map(row).join('')}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f8fafc;font-weight:bold;">
+          <td colspan="2" style="padding:6px 8px;">TOTAL PAID (${paid.length} installments)</td>
+          <td style="text-align:right;color:#16a34a;">${fmtAmt(paidTotal)}</td>
+          <td colspan="2"></td>
+        </tr>
+        <tr style="background:#f1f5f9;font-weight:bold;">
+          <td colspan="2" style="padding:6px 8px;">REMAINING BALANCE (${pending.length} installments)</td>
+          <td style="text-align:right;color:#dc2626;">${fmtAmt(pendingTotal)}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
     </table>
   `;
 
-  return `
-    ${companyHeader(company)}
-    <div class="doc-title-band">INSTALLMENT SCHEDULE<div class="doc-subtitle">Payment Plan & Status</div></div>
-
-    <div class="report-summary-grid" style="margin-bottom:8px;">
-      <div class="summary-card">
-        <div class="summary-card-title">Customer</div>
-        <div class="summary-card-value" style="font-size:11px;">${customer.name}</div>
-        <div style="font-size:9px;color:#666;">${customer.customerId} | ${customer.phone}</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-card-title">Plot Details</div>
-        <div class="summary-card-value" style="font-size:11px;">${plot.plotNumber}, Block ${plot.block}</div>
-        <div style="font-size:9px;color:#666;">${plot.size} ${plot.sizeUnit} | ${plot.category}</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-card-title">Total Plan Value</div>
-        <div class="summary-card-value">${fmtAmt(sale.totalPrice)}</div>
-        <div style="font-size:9px;color:#dc2626;">Remaining: ${fmtAmt(pendingTotal)}</div>
-      </div>
-    </div>
-
-    <div class="info-section" style="margin-bottom:8px;">
-      <div class="info-section-title">Payment Summary</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center;padding:6px;">
-        <div><div style="font-size:9px;color:#666;">Total Plot Price</div><div style="font-weight:bold;color:#1a3c6e;">${fmtAmt(sale.totalPrice)}</div></div>
-        <div style="border-left:1px solid #e2e8f0;"><div style="font-size:9px;color:#666;">Paid To Date</div><div style="font-weight:bold;color:#16a34a;">${fmtAmt(paidTotal)}</div></div>
-        <div style="border-left:1px solid #e2e8f0;"><div style="font-size:9px;color:#666;">Remaining</div><div style="font-weight:bold;color:#dc2626;">${fmtAmt(pendingTotal)}</div></div>
-      </div>
-    </div>
-
-    ${tableHTML}
-
-    <div style="font-size:8px;color:#666;text-align:center;margin-top:8px;border-top:1px solid #e2e8f0;padding-top:6px;">
-      This schedule is computer-generated. ${company.name} | ${company.phone}
-    </div>
-  `;
+  return buildLetterheadDocument({
+    sections: [
+      { title: 'Installment Plan', bodyHtml: content }
+    ]
+  });
 }
-
-// ─── DOWN PAYMENT RECEIPT (1 copy) ───────────────────────────────────────────
 
 export function generateDownPaymentReceiptHTML(
   tx: DownPaymentTransaction,
@@ -518,57 +509,74 @@ export function generateDownPaymentReceiptHTML(
   const totalReceived  = (sale.downPaymentReceived || 0);
   const stillPending   = Math.max(0, (sale.remainingDownPayment || 0) - totalReceived);
 
-  return `
-    <div style="border:1px solid #ccc;font-family:Arial,sans-serif;font-size:11px;max-width:700px;margin:0 auto;">
-      ${companyHeader(company)}
-      <div class="doc-title-band">DOWN PAYMENT RECEIPT</div>
+  const content = `
+    <div style="margin-bottom:12px;text-align:right;font-size:9.5pt;color:#64748b;">
+      Receipt #: <strong>${tx.receiptNumber}</strong> | Date: <strong>${fmtDate(tx.paymentDate)}</strong>
+    </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0;">
-        <div style="padding:10px;border-right:1px solid #e2e8f0;">
-          <div class="info-section-title" style="margin-bottom:6px;">CUSTOMER</div>
-          <table style="font-size:10px;">
-            <tr><td style="color:#666;width:60px;">Name:</td><td style="font-weight:bold;">${customer.name}</td></tr>
-            <tr><td style="color:#666;">ID:</td><td>${customer.customerId}</td></tr>
-            <tr><td style="color:#666;">Phone:</td><td>${customer.phone}</td></tr>
-          </table>
-        </div>
-        <div style="padding:10px;">
-          <div class="info-section-title" style="margin-bottom:6px;">PLOT</div>
-          <table style="font-size:10px;">
-            <tr><td style="color:#666;width:60px;">Plot #:</td><td style="font-weight:bold;color:#1a3c6e;">${plot.plotNumber}</td></tr>
-            <tr><td style="color:#666;">Block:</td><td>${plot.block}</td></tr>
-            <tr><td style="color:#666;">Size:</td><td>${plot.size} ${plot.sizeUnit}</td></tr>
-          </table>
-        </div>
-      </div>
-
-      <div style="padding:10px;">
-        <div class="info-section-title" style="margin-bottom:6px;">PAYMENT DETAILS</div>
-        <table>
-          <tr><td style="padding:5px 8px;">Receipt Number:</td><td style="text-align:right;font-weight:bold;">${tx.receiptNumber}</td></tr>
-          <tr style="background:#f8fafc;"><td style="padding:5px 8px;">Payment Date:</td><td style="text-align:right;">${fmtDate(tx.paymentDate)}</td></tr>
-          <tr><td style="padding:5px 8px;">Total Down Payment Required:</td><td style="text-align:right;color:#1a3c6e;font-weight:bold;">${fmtAmt(sale.downPaymentAmount)}</td></tr>
-          <tr style="background:#f8fafc;"><td style="padding:5px 8px;">Booking Already Paid:</td><td style="text-align:right;">${fmtAmt(sale.bookingAmountPaid)}</td></tr>
-          <tr><td style="padding:5px 8px;">Amount Received (this payment):</td><td style="text-align:right;font-size:14px;font-weight:bold;color:#1a3c6e;">${fmtAmt(tx.amount)}</td></tr>
-          <tr style="background:#f8fafc;"><td style="padding:5px 8px;">Payment Method:</td><td style="text-align:right;">${tx.paymentMethod}${tx.bankName ? ` — ${tx.bankName}` : ''}</td></tr>
-          ${tx.chequeNumber ? `<tr><td style="padding:5px 8px;">Cheque #:</td><td style="text-align:right;">${tx.chequeNumber}</td></tr>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
+        <div class="lh-info-title">Customer Information</div>
+        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
+          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Name:</td><td style="font-weight:bold;padding:3px 8px;">${customer.name}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">ID:</td><td style="padding:3px 8px;">${customer.customerId}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Phone:</td><td style="padding:3px 8px;">${customer.phone}</td></tr>
         </table>
-        <div class="remaining-highlight" style="margin-top:8px;">
-          <span>REMAINING DOWN PAYMENT PENDING:</span>
-          <span>${fmtAmt(stillPending)}</span>
-        </div>
       </div>
 
-      <div class="signature-area" style="padding:0 10px 10px;">
-        <div>Received By:<div class="sig-line" style="width:130px;"></div></div>
-        <div><div class="stamp-box">STAMP</div></div>
-        <div style="text-align:right;">Customer Sign:<div class="sig-line" style="width:130px;margin-left:auto;"></div></div>
+      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
+        <div class="lh-info-title">Plot Details</div>
+        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
+          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Project:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${company.name}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Plot #:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${plot.plotNumber}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Block:</td><td style="padding:3px 8px;">${plot.block}</td></tr>
+          <tr><td style="color:#64748b;padding:3px 8px;">Size:</td><td style="padding:3px 8px;">${plot.size} ${plot.sizeUnit}</td></tr>
+        </table>
       </div>
     </div>
+
+    <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;margin-bottom:12px;">
+      <div class="lh-info-title">Payment Details</div>
+      <table class="lh-table" style="margin-bottom:0;">
+        <tr><td style="padding:6px 10px;">Total Down Payment Required:</td><td style="text-align:right;font-weight:bold;color:#1a3c6e;">${fmtAmt(sale.downPaymentAmount)}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Booking Already Paid:</td><td style="text-align:right;">${fmtAmt(sale.bookingAmountPaid)}</td></tr>
+        <tr><td style="padding:6px 10px;">Amount Received (this payment):</td><td style="text-align:right;font-size:12pt;font-weight:bold;color:#1a3c6e;">${fmtAmt(tx.amount)}</td></tr>
+        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Payment Method:</td><td style="text-align:right;">${tx.paymentMethod}${tx.bankName ? ` - ${tx.bankName}` : ''}</td></tr>
+        ${tx.chequeNumber ? `<tr><td style="padding:6px 10px;">Cheque #:</td><td style="text-align:right;">${tx.chequeNumber}</td></tr>` : ''}
+        <tr style="background:#fffbeb;font-weight:bold;"><td style="padding:6px 10px;color:#b45309;">Remaining Down Payment Pending:</td><td style="text-align:right;color:#b45309;font-size:11pt;">${fmtAmt(stillPending)}</td></tr>
+      </table>
+    </div>
+
+    <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;padding:8px 12px;font-size:9.5pt;text-align:center;color:#334155;">
+      This receipt confirms payment received towards the plot down payment.
+    </div>
   `;
+
+  return buildLetterheadDocument({
+    sections: [
+      { title: 'Down Payment Receipt', bodyHtml: content }
+    ]
+  });
 }
 
-// ─── Legacy alias for PlotAgreement.tsx ───────────────────────────────────────
+export function generatePossessionReceiptHTML(
+  payment: Installment,
+  customer: Customer,
+  plot: Plot,
+  company: CompanySettings,
+  remainingBalance: number,
+  totalPaidSoFar: number
+): string {
+  return generatePaymentReceipt(
+    { ...payment, type: 'on_possession' },
+    customer,
+    plot,
+    company,
+    remainingBalance,
+    totalPaidSoFar
+  );
+}
+
 export function generateInstallmentSchedule(
   sale: Sale,
   customer: Customer,

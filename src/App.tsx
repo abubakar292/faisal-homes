@@ -72,6 +72,9 @@ const CompanyInfo     = lazy(() => import('./pages/settings/CompanyInfo'));
 const UsersManagement = lazy(() => import('./pages/settings/UsersManagement'));
 const BackupData      = lazy(() => import('./pages/settings/BackupData'));
 
+// Dev tools (dev-only)
+const DevLetterhead   = import.meta.env.DEV ? lazy(() => import('./pages/dev/DevLetterhead')) : null;
+
 import { PageLoading } from './components/brand';
 
 const PageSuspense: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -100,11 +103,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // ─── App Inner ────────────────────────────────────────────────────────────────
 const AppInner: React.FC = () => {
   const { loading, currentUser } = useAuth();
-  const isDemo =
+  const isDevOrDemo =
     typeof window !== 'undefined' &&
-    (window.location.search.includes('demo=1') || window.location.search.includes('demo3d=1'));
-  const [splashDone, setSplashDone] = useState(isDemo);
-  const [appMounted, setAppMounted] = useState(isDemo);
+    (window.location.search.includes('demo=1') ||
+     window.location.search.includes('demo3d=1') ||
+     window.location.pathname.startsWith('/dev/'));
+  const [splashDone, setSplashDone] = useState(isDevOrDemo);
+  const [appMounted, setAppMounted] = useState(isDevOrDemo);
 
   useEffect(() => {
     if (currentUser) {
@@ -124,12 +129,15 @@ const AppInner: React.FC = () => {
         />
       )}
       {appMounted && (
-        <div id="app-shell" style={{ opacity: isDemo ? 1 : 0 }}>
+        <div id="app-shell" style={{ opacity: isDevOrDemo ? 1 : 0 }}>
           <PageSuspense>
             <Routes>
         {/* Public routes */}
         <Route path="/login"    element={<Login />} />
         <Route path="/register" element={<Register />} />
+        {import.meta.env.DEV && DevLetterhead && (
+          <Route path="/dev/letterhead" element={<DevLetterhead />} />
+        )}
 
         {/* Protected layout routes */}
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>

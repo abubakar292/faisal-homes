@@ -3,6 +3,7 @@ import { FileText, Printer } from 'lucide-react';
 import PageHeader from '../../components/ui/PageHeader';
 import { getDocument } from '../../firebase/firestore';
 import { printInNewWindow } from '../../utils/printUtils';
+import { buildLetterheadDocument } from '../../utils/letterhead';
 import type { CompanySettings } from '../../types';
 
 const TermsAndConditions: React.FC = () => {
@@ -17,20 +18,15 @@ const TermsAndConditions: React.FC = () => {
   const handlePrint = () => {
     if (!company) return;
     
-    const html = `
-      <div class="company-header">
-        <div>
-          <div class="company-name">${company.name}</div>
-          <div class="company-sub">${company.address || ''} ${company.phone ? '| ' + company.phone : ''}</div>
-        </div>
-        <div class="company-right">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
-      </div>
-      <div class="doc-title-band">TERMS & CONDITIONS</div>
-      <div style="padding: 16px; font-size: 11px; line-height: 1.7; white-space: pre-wrap; color: #333;">
-        ${company.termsAndConditions || 'No terms and conditions specified.'}
+    const termsHtml = `
+      <div style="font-size:10.5pt;line-height:1.8;white-space:pre-wrap;color:#334155;padding:10px 0;">
+        \${company.termsAndConditions || 'No terms and conditions specified.'}
       </div>
     `;
-    printInNewWindow(html, 'Terms and Conditions');
+    const docHtml = buildLetterheadDocument({
+      sections: [{ title: 'Policies, Terms & Conditions', bodyHtml: termsHtml }]
+    });
+    printInNewWindow(docHtml, 'Policies, Terms & Conditions');
   };
 
   return (
