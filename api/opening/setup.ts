@@ -1,4 +1,4 @@
-import { isValidPinFormat, createRecord } from './_crypto.js';
+import { isValidPinFormat, createRecord, createToken } from './_crypto.js';
 import { getSecurityStore } from './_store.js';
 import { parseJsonBody, sendJson } from './_http.js';
 
@@ -31,7 +31,13 @@ export default async function handler(req: any, res: any) {
       return sendJson(res, 409, { ok: false, error: 'Opening password already configured' });
     }
 
-    return sendJson(res, 200, { ok: true, message: 'Opening password set successfully' });
+    const { token, exp } = createToken();
+    return sendJson(res, 200, {
+      ok: true,
+      message: 'Opening password set successfully',
+      token,
+      exp,
+    });
   } catch (err: any) {
     return sendJson(res, 500, { ok: false, error: 'Internal server error' });
   }
