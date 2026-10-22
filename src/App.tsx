@@ -6,8 +6,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useMediaQuery } from './hooks/useMediaQuery';
 
 import { SplashScreen, LoaderProvider, useLoader } from './components/brand';
-import { OpeningProvider, useOpening } from './contexts/OpeningContext';
-import OpeningGate from './components/brand/OpeningGate';
 import { initMotionDebug } from './components/brand/motionDebug';
 import { useEffect, useState } from 'react';
 
@@ -72,7 +70,6 @@ const TermsAndConditions     = lazy(() => import('./pages/reports/TermsAndCondit
 // Settings
 const CompanyInfo     = lazy(() => import('./pages/settings/CompanyInfo'));
 const UsersManagement = lazy(() => import('./pages/settings/UsersManagement'));
-const SecuritySettings = lazy(() => import('./pages/settings/Security'));
 const BackupData      = lazy(() => import('./pages/settings/BackupData'));
 
 // Dev tools (dev-only)
@@ -106,7 +103,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // ─── App Inner ────────────────────────────────────────────────────────────────
 const AppInner: React.FC = () => {
   const { loading, currentUser } = useAuth();
-  const { isUnlocked, isLoading: openingLoading } = useOpening();
   const isDevOrDemo =
     typeof window !== 'undefined' &&
     (window.location.search.includes('demo=1') ||
@@ -126,17 +122,14 @@ const AppInner: React.FC = () => {
     <>
       {!splashDone && (
         <SplashScreen 
-          ready={!loading && !openingLoading} 
+          ready={!loading} 
           appMounted={appMounted}
           setAppMounted={setAppMounted}
           onDone={() => setSplashDone(true)} 
         />
       )}
-      {splashDone && !isUnlocked && (
-        <OpeningGate />
-      )}
       {appMounted && (
-        <div id="app-shell" style={{ opacity: isDevOrDemo || splashDone ? 1 : 0 }}>
+        <div id="app-shell" style={{ opacity: isDevOrDemo ? 1 : 0 }}>
           <PageSuspense>
             <Routes>
         {/* Public routes */}
@@ -209,7 +202,6 @@ const AppInner: React.FC = () => {
           {/* Settings */}
           <Route path="settings/company"   element={<CompanyInfo />} />
           <Route path="settings/users"     element={<UsersManagement />} />
-          <Route path="settings/security"  element={<SecuritySettings />} />
           <Route path="settings/backup"    element={<BackupData />} />
           <Route path="settings/terms"     element={<TermsAndConditions />} />
 
@@ -260,14 +252,12 @@ const ResponsiveToaster: React.FC = () => {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 const App: React.FC = () => (
   <BrowserRouter>
-    <OpeningProvider>
-      <AuthProvider>
-        <LoaderProvider>
-          <ResponsiveToaster />
-          <AppInner />
-        </LoaderProvider>
-      </AuthProvider>
-    </OpeningProvider>
+    <AuthProvider>
+      <LoaderProvider>
+        <ResponsiveToaster />
+        <AppInner />
+      </LoaderProvider>
+    </AuthProvider>
   </BrowserRouter>
 );
 
