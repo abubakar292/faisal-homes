@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, LogOut, User, ChevronDown, Download } from 'lucide-react';
+import { Menu, LogOut, User, ChevronDown, Download, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOpening } from '../../contexts/OpeningContext';
 import NotificationBell from './NotificationBell';
 import BrandMark from '../brand/BrandMark';
 import { usePWAInstall } from '../../pwa';
@@ -15,6 +16,7 @@ interface Props {
 
 const Navbar: React.FC<Props> = ({ onToggleSidebar, pageTitle = 'Dashboard' }) => {
   const { appUser, currentUser, logout, isAdmin } = useAuth();
+  const { lockNow } = useOpening();
   const { canInstall, promptInstall } = usePWAInstall();
   const navigate = useNavigate();
   const location = useLocation();
@@ -188,6 +190,13 @@ const Navbar: React.FC<Props> = ({ onToggleSidebar, pageTitle = 'Dashboard' }) =
                     >
                       <User size={14} className="text-slate-400" />
                       Settings
+                    </button>
+                    <button
+                      onClick={() => { setMenuOpen(false); lockNow(); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Lock size={14} className="text-slate-400" />
+                      Lock
                     </button>
                     <div className="border-t border-slate-100 my-1" />
                     <button

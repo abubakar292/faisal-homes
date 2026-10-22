@@ -7,7 +7,7 @@ import {
   Users, BookOpen, ClipboardList, CreditCard, Receipt,
   History, Handshake, DollarSign, BarChart2, Calendar,
   AlertCircle, Settings, ChevronDown, Database, Building2,
-  FileText, Plus, X
+  FileText, Plus, X, Shield
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -109,6 +109,7 @@ const nav: NavGroup[] = [
       { label: 'Company Info', path: '/settings/company', icon: <Building2 size={14} /> },
       { label: 'Terms & Conditions', path: '/settings/terms', icon: <FileText size={14} /> },
       { label: 'Users',        path: '/settings/users',   icon: <Users size={14} />, adminOnly: true },
+      { label: 'Security',     path: '/settings/security', icon: <Shield size={14} />, adminOnly: true },
       { label: 'Backup Data',  path: '/settings/backup',  icon: <Database size={14} /> },
     ],
   },
