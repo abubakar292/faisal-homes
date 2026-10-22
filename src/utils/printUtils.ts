@@ -1,4 +1,4 @@
-import { buildLetterheadDocument } from './letterhead';
+import { buildLetterheadDocument, type ReceiptItem } from './letterhead';
 import { printDocument } from './printDocument';
 import { formatCurrency, formatDate } from './formatters';
 import type { Booking, Customer, Plot, Sale, Installment, CompanySettings, DownPaymentTransaction } from '../types';
@@ -11,22 +11,18 @@ export function generateReportHTML(
   rows: (string | number)[][],
   summary?: string
 ): string {
-  const companyName  = typeof company === 'string' ? company : (company?.name || '');
-  const companyAddr  = typeof company === 'string' ? '' : ((company as { address?: string })?.address || '');
-  const companyPhone = typeof company === 'string' ? '' : ((company as { phone?: string })?.phone || '');
-  const thead = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-  const tbody = rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('');
-  return `
-    <div class="company-header">
-      <div>
-        <div class="company-name">${companyName}</div>
-        <div class="company-sub">${companyAddr}${companyPhone ? ' | ' + companyPhone : ''}</div>
-      </div>
-      <div class="company-right">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
-    </div>
-    <div class="doc-title-band">${title}${summary ? `<div class="doc-subtitle">${summary}</div>` : ''}</div>
-    <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>
-  `;
+  const companyName = typeof company === 'string' ? company : (company?.name || '');
+  return buildLetterheadDocument({
+    layout: 'report',
+    report: {
+      title,
+      headers,
+      rows,
+      summary,
+      companyName,
+      subtitle: summary
+    }
+  });
 }
 
 // ─── Helpers (local, not exported) ───────────────────────────────────────────
@@ -195,11 +191,9 @@ function companyHeader(company: { name: string; address: string; phone: string }
 // ─── BOOKING RECEIPT ─────────────────────────────────────────────────────────
 
 export function generateBookingReceipt(booking: Booking, customer: Customer, plot: Plot, company: CompanySettings): string {
-  const makeCopyContent = (copyLabel: string, isCustomerCopy = false) => `
-    <div style="margin-bottom:12px;">
-      <span class="lh-copy-tag${isCustomerCopy ? ' customer' : ''}">${copyLabel}</span>
-      <span style="float:right;font-size:9.5pt;color:#64748b;margin-top:2px;">Receipt #: <strong>${booking.receiptNumber}</strong> | Date: <strong>${fmtDate(booking.bookingDate)}</strong></span>
-      <div style="clear:both;"></div>
+  const content = `
+    <div style="margin-bottom:12px;text-align:right;font-size:9.5pt;color:#64748b;">
+      Booking #: <strong>${booking.receiptNumber}</strong> | Date: <strong>${fmtDate(booking.bookingDate)}</strong>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
@@ -237,14 +231,14 @@ export function generateBookingReceipt(booking: Booking, customer: Customer, plo
     </div>
 
     <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;padding:8px 12px;font-size:9.5pt;text-align:center;color:#334155;margin-bottom:10px;">
-      This receipt confirms your booking. Plot will be reserved upon receipt of payment.
+      This booking form confirms plot reservation upon receipt of payment.
     </div>
   `;
 
   return buildLetterheadDocument({
+    fitOnePage: true,
     sections: [
-      { title: 'Booking Form', bodyHtml: makeCopyContent('Office Copy', false) },
-      { title: 'Booking Form', bodyHtml: makeCopyContent('Customer Copy', true) }
+      { title: 'Booking Form', bodyHtml: content }
     ]
   });
 }
@@ -266,56 +260,32 @@ export function generatePaymentReceipt(
     : isPossession ? 'On Possession'
     : `Installment #${payment.installmentNumber} of ${payment.totalInstallments}`;
 
-  const makeCopy = (copyLabel: string, isCustomerCopy = false) => `
-    <div style="margin-bottom:12px;">
-      <span class="lh-copy-tag${isCustomerCopy ? ' customer' : ''}">${copyLabel}</span>
-      <span style="float:right;font-size:9.5pt;color:#64748b;margin-top:2px;">Receipt #: <strong>${payment.receiptNumber}</strong> | Date: <strong>${fmtDate(payment.paymentDate || new Date())}</strong></span>
-      <div style="clear:both;"></div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
-        <div class="lh-info-title">Customer Information</div>
-        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
-          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Name:</td><td style="font-weight:bold;padding:3px 8px;">${customer.name}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">ID:</td><td style="padding:3px 8px;">${customer.customerId}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">Phone:</td><td style="padding:3px 8px;">${customer.phone}</td></tr>
-        </table>
-      </div>
-
-      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
-        <div class="lh-info-title">Plot Details</div>
-        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
-          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Project:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${company.name}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">Plot #:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${plot.plotNumber}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">Block:</td><td style="padding:3px 8px;">${plot.block}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">Payment Type:</td><td style="padding:3px 8px;font-weight:bold;">${typeLabel}</td></tr>
-        </table>
-      </div>
-    </div>
-
-    <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;margin-bottom:12px;">
-      <div class="lh-info-title">Payment Transaction</div>
-      <table class="lh-table" style="margin-bottom:0;">
-        <tr><td style="padding:6px 10px;">Due Date:</td><td style="text-align:right;">${fmtDate(payment.dueDate)}</td></tr>
-        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Amount Received:</td><td style="text-align:right;font-weight:bold;font-size:12pt;color:#1a3c6e;">${fmtAmt(payment.amountPaid)}</td></tr>
-        <tr><td style="padding:6px 10px;">Payment Method:</td><td style="text-align:right;">${payment.paymentMethod}${payment.bankName ? ` - ${payment.bankName}` : ''}</td></tr>
-        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Total Paid To Date:</td><td style="text-align:right;font-weight:bold;color:#16a34a;">${fmtAmt(totalPaidSoFar)}</td></tr>
-        <tr><td style="padding:6px 10px;font-weight:bold;">Remaining Balance:</td><td style="text-align:right;font-weight:bold;font-size:11pt;color:#dc2626;">${fmtAmt(remainingBalance)}</td></tr>
-      </table>
-    </div>
-
-    <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;padding:8px 12px;font-size:9.5pt;text-align:center;color:#334155;">
-      This receipt is an official acknowledgment of payment received.
-    </div>
-  `;
+  const receiptData: ReceiptItem = {
+    receiptNo: payment.receiptNumber || 'N/A',
+    date: payment.paymentDate || new Date(),
+    customerName: customer.name,
+    fatherName: customer.fatherName,
+    cnic: customer.cnic,
+    phone: customer.phone,
+    plotNo: plot.plotNumber,
+    block: plot.block,
+    plotSize: `${plot.size} ${plot.sizeUnit}`,
+    category: plot.category,
+    paymentType: typeLabel,
+    amount: payment.amountPaid || 0,
+    paymentMethod: payment.paymentMethod || 'Cash',
+    bankName: payment.bankName,
+    totalPaidToDate: totalPaidSoFar,
+    remainingBalance: remainingBalance,
+    projectName: company.name
+  };
 
   return buildLetterheadDocument({
-    sections: [
-      { title, bodyHtml: makeCopy('Office Copy', false) },
-      { title, bodyHtml: makeCopy('Accounts Copy', false) },
-      { title, bodyHtml: makeCopy('Customer Copy', true) }
-    ]
+    layout: 'receipt-pair',
+    receipt: {
+      title,
+      data: receiptData
+    }
   });
 }
 
@@ -379,26 +349,10 @@ export function generatePlotAgreement(sale: Sale, customer: Customer, plot: Plot
     </div>
   `;
 
-  const termsBody = `
-    <div style="font-size:10.5pt;line-height:1.7;color:#334155;padding:10px 0;">
-      ${company.termsAndConditions ? `
-        <div style="white-space:pre-wrap;">${company.termsAndConditions}</div>
-      ` : `
-        <ol style="padding-left:20px;margin:0;">
-          <li style="margin-bottom:8px;">The buyer agrees to pay installments strictly as per the installment plan schedule provided separately.</li>
-          <li style="margin-bottom:8px;">Physical possession of the plot will be handed over upon full payment and clearance of all dues as per agreement.</li>
-          <li style="margin-bottom:8px;">Any default or continuous delay in installment payments may result in cancellation or surcharge as per company rules.</li>
-          <li style="margin-bottom:8px;">The remaining down payment must be cleared in full before monthly installment plan commencement.</li>
-          <li style="margin-bottom:8px;">This agreement is binding and governed by the applicable laws of Pakistan.</li>
-        </ol>
-      `}
-    </div>
-  `;
-
   return buildLetterheadDocument({
+    fitOnePage: true,
     sections: [
-      { title: 'Plot Sale Agreement', bodyHtml: agreementBody },
-      { title: 'Policies, Terms & Conditions', bodyHtml: termsBody }
+      { title: 'Plot Sale Agreement', bodyHtml: agreementBody }
     ]
   });
 }
@@ -472,7 +426,7 @@ export function generateScheduleHTML(
       </div>
     </div>
 
-    <table class="lh-table">
+    <table class="lh-table lh-installment-table">
       ${thead}
       <tbody>
         ${schedule.map(row).join('')}
@@ -493,6 +447,7 @@ export function generateScheduleHTML(
   `;
 
   return buildLetterheadDocument({
+    fitOnePage: true,
     sections: [
       { title: 'Installment Plan', bodyHtml: content }
     ]
@@ -506,56 +461,36 @@ export function generateDownPaymentReceiptHTML(
   sale: Sale,
   company: CompanySettings
 ): string {
-  const totalReceived  = (sale.downPaymentReceived || 0);
-  const stillPending   = Math.max(0, (sale.remainingDownPayment || 0) - totalReceived);
+  const totalReceived = (sale.downPaymentReceived || 0);
+  const stillPending = Math.max(0, (sale.remainingDownPayment || 0) - totalReceived);
+  const remainingTotal = (sale.remainingAmount || 0) + stillPending;
 
-  const content = `
-    <div style="margin-bottom:12px;text-align:right;font-size:9.5pt;color:#64748b;">
-      Receipt #: <strong>${tx.receiptNumber}</strong> | Date: <strong>${fmtDate(tx.paymentDate)}</strong>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
-        <div class="lh-info-title">Customer Information</div>
-        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
-          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Name:</td><td style="font-weight:bold;padding:3px 8px;">${customer.name}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">ID:</td><td style="padding:3px 8px;">${customer.customerId}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">Phone:</td><td style="padding:3px 8px;">${customer.phone}</td></tr>
-        </table>
-      </div>
-
-      <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
-        <div class="lh-info-title">Plot Details</div>
-        <table style="width:100%;font-size:10pt;border-collapse:collapse;padding:4px;">
-          <tr><td style="color:#64748b;padding:3px 8px;width:75px;">Project:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${company.name}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">Plot #:</td><td style="font-weight:bold;padding:3px 8px;color:#1a3c6e;">${plot.plotNumber}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">Block:</td><td style="padding:3px 8px;">${plot.block}</td></tr>
-          <tr><td style="color:#64748b;padding:3px 8px;">Size:</td><td style="padding:3px 8px;">${plot.size} ${plot.sizeUnit}</td></tr>
-        </table>
-      </div>
-    </div>
-
-    <div style="border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;margin-bottom:12px;">
-      <div class="lh-info-title">Payment Details</div>
-      <table class="lh-table" style="margin-bottom:0;">
-        <tr><td style="padding:6px 10px;">Total Down Payment Required:</td><td style="text-align:right;font-weight:bold;color:#1a3c6e;">${fmtAmt(sale.downPaymentAmount)}</td></tr>
-        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Booking Already Paid:</td><td style="text-align:right;">${fmtAmt(sale.bookingAmountPaid)}</td></tr>
-        <tr><td style="padding:6px 10px;">Amount Received (this payment):</td><td style="text-align:right;font-size:12pt;font-weight:bold;color:#1a3c6e;">${fmtAmt(tx.amount)}</td></tr>
-        <tr style="background:#f8fafc;"><td style="padding:6px 10px;">Payment Method:</td><td style="text-align:right;">${tx.paymentMethod}${tx.bankName ? ` - ${tx.bankName}` : ''}</td></tr>
-        ${tx.chequeNumber ? `<tr><td style="padding:6px 10px;">Cheque #:</td><td style="text-align:right;">${tx.chequeNumber}</td></tr>` : ''}
-        <tr style="background:#fffbeb;font-weight:bold;"><td style="padding:6px 10px;color:#b45309;">Remaining Down Payment Pending:</td><td style="text-align:right;color:#b45309;font-size:11pt;">${fmtAmt(stillPending)}</td></tr>
-      </table>
-    </div>
-
-    <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;padding:8px 12px;font-size:9.5pt;text-align:center;color:#334155;">
-      This receipt confirms payment received towards the plot down payment.
-    </div>
-  `;
+  const receiptData: ReceiptItem = {
+    receiptNo: tx.receiptNumber || 'N/A',
+    date: tx.paymentDate || new Date(),
+    customerName: customer.name,
+    fatherName: customer.fatherName,
+    cnic: customer.cnic,
+    phone: customer.phone,
+    plotNo: plot.plotNumber,
+    block: plot.block,
+    plotSize: `${plot.size} ${plot.sizeUnit}`,
+    category: plot.category,
+    paymentType: 'Down Payment',
+    amount: tx.amount,
+    paymentMethod: tx.paymentMethod || 'Cash',
+    bankName: tx.bankName,
+    chequeNumber: tx.chequeNumber,
+    remainingBalance: remainingTotal,
+    projectName: company.name
+  };
 
   return buildLetterheadDocument({
-    sections: [
-      { title: 'Down Payment Receipt', bodyHtml: content }
-    ]
+    layout: 'receipt-pair',
+    receipt: {
+      title: 'Down Payment Receipt',
+      data: receiptData
+    }
   });
 }
 

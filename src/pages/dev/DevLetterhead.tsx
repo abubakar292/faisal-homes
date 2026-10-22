@@ -6,6 +6,7 @@ import {
   generateScheduleHTML,
   generateDownPaymentReceiptHTML,
   generatePossessionReceiptHTML,
+  generateReportHTML,
   printContent
 } from '../../utils/printUtils';
 import { generateCustomerLedgerHTML } from '../../utils/ledgerPrint';
@@ -98,29 +99,35 @@ const mockSale = {
   createdAt: new Date('2026-02-10')
 } as unknown as Sale;
 
-const mock36Installments: Installment[] = Array.from({ length: 36 }, (_, idx) => {
-  const num = idx + 1;
-  const isPaid = num <= 4;
-  const isOverdue = num === 5;
-  const isSemi = num % 6 === 0;
-  return {
-    id: `inst-${num}`,
-    saleId: 'sale-901',
-    customerId: 'cust-101',
-    plotId: 'plot-204',
-    installmentNumber: num,
-    totalInstallments: 36,
-    dueDate: new Date(2026, 1 + num, 15),
-    amountDue: isSemi ? 120000 : 65000,
-    amountPaid: isPaid ? (isSemi ? 120000 : 65000) : 0,
-    status: isPaid ? 'paid' : (isOverdue ? 'overdue' : 'pending'),
-    type: isSemi ? 'semi_annual' : 'regular',
-    paymentDate: isPaid ? new Date(2026, 1 + num, 10) : undefined,
-    paymentMethod: isPaid ? 'Cash' : undefined,
-    receiptNumber: isPaid ? `FH-REC-10${num}` : undefined,
-    createdAt: new Date('2026-02-10')
-  } as unknown as Installment;
-});
+function createMockInstallments(count: number): Installment[] {
+  return Array.from({ length: count }, (_, idx) => {
+    const num = idx + 1;
+    const isPaid = num <= 4;
+    const isOverdue = num === 5;
+    const isSemi = num % 6 === 0;
+    return {
+      id: `inst-${num}`,
+      saleId: 'sale-901',
+      customerId: 'cust-101',
+      plotId: 'plot-204',
+      installmentNumber: num,
+      totalInstallments: count,
+      dueDate: new Date(2026, 1 + num, 15),
+      amountDue: isSemi ? 120000 : Math.round(2400000 / count),
+      amountPaid: isPaid ? (isSemi ? 120000 : Math.round(2400000 / count)) : 0,
+      status: isPaid ? 'paid' : (isOverdue ? 'overdue' : 'pending'),
+      type: isSemi ? 'semi_annual' : 'regular',
+      paymentDate: isPaid ? new Date(2026, 1 + num, 10) : undefined,
+      paymentMethod: isPaid ? 'Cash' : undefined,
+      receiptNumber: isPaid ? `FH-REC-10${num}` : undefined,
+      createdAt: new Date('2026-02-10')
+    } as unknown as Installment;
+  });
+}
+
+const mock36Installments = createMockInstallments(36);
+const mock60Installments = createMockInstallments(60);
+const mock120Installments = createMockInstallments(120);
 
 const mockPaymentInstallment = {
   id: 'inst-3',
@@ -254,12 +261,17 @@ type DocType =
   | 'plot_agreement'
   | 'booking_form'
   | 'installment_plan'
+  | 'installment_plan_60'
+  | 'installment_plan_120'
   | 'payment_receipt'
   | 'down_payment_receipt'
   | 'possession_receipt'
   | 'customer_ledger'
   | 'terms_and_conditions'
-  | 'single_line_short';
+  | 'single_line_short'
+  | 'report_portrait'
+  | 'report_landscape'
+  | 'report_multipage';
 
 export const DevLetterhead: React.FC = () => {
   const [selectedDoc, setSelectedDoc] = useState<DocType>('plot_agreement');
@@ -277,6 +289,14 @@ export const DevLetterhead: React.FC = () => {
       installment_plan: {
         title: 'Installment Plan',
         html: generateScheduleHTML(mockSale, mockCustomer, mockPlot, mock36Installments, mockCompany)
+      },
+      installment_plan_60: {
+        title: 'Installment Plan (60 Months)',
+        html: generateScheduleHTML(mockSale, mockCustomer, mockPlot, mock60Installments, mockCompany)
+      },
+      installment_plan_120: {
+        title: 'Installment Plan (120 Months)',
+        html: generateScheduleHTML(mockSale, mockCustomer, mockPlot, mock120Installments, mockCompany)
       },
       payment_receipt: {
         title: 'Payment Receipt',
@@ -319,6 +339,55 @@ export const DevLetterhead: React.FC = () => {
             }
           ]
         })
+      },
+      report_portrait: {
+        title: 'Daily Collection Report',
+        html: generateReportHTML(
+          mockCompany,
+          'Daily Collection Report',
+          ['Receipt #', 'Customer', 'Plot', 'Inst #', 'Amount', 'Method'],
+          [
+            ['FH-REC-1001', 'Muhammad Tariq', '204 (B)', '#1', '65,000', 'Cash'],
+            ['FH-REC-1002', 'Muhammad Tariq', '204 (B)', '#2', '65,000', 'Cash'],
+            ['FH-REC-1003', 'Muhammad Tariq', '204 (B)', '#3', '65,000', 'Bank Transfer'],
+            ['FH-REC-1004', 'Muhammad Tariq', '204 (B)', '#4', '65,000', 'Cash'],
+            ['FH-BK-501', 'Muhammad Tariq', '204 (B)', 'Booking', '350,000', 'Bank Transfer']
+          ],
+          'Total Collection: Rs. 610,000'
+        )
+      },
+      report_landscape: {
+        title: 'Comprehensive Sales Audit Report',
+        html: generateReportHTML(
+          mockCompany,
+          'Comprehensive Sales Audit Report',
+          ['Sale #', 'Date', 'Customer', 'CNIC', 'Phone', 'Plot', 'Block', 'Size', 'Price', 'Received', 'Balance'],
+          [
+            ['SL-00901', '10/02/2026', 'Muhammad Tariq', '33100-1234567-1', '0300-9876543', '204', 'B', '5 Marla', '3,500,000', '830,000', '2,670,000'],
+            ['SL-00902', '12/02/2026', 'Ahmad Ali', '33100-2345678-2', '0300-1122334', '205', 'B', '5 Marla', '3,500,000', '700,000', '2,800,000'],
+            ['SL-00903', '15/02/2026', 'Zahid Hussain', '33100-3456789-3', '0300-5566778', '102', 'A', '10 Marla', '7,000,000', '1,400,000', '5,600,000']
+          ],
+          'Total Sales: 3 | Total Portfolio Value: Rs. 14,000,000'
+        )
+      },
+      report_multipage: {
+        title: 'Master Ledger Audit (Multi-Page)',
+        html: generateReportHTML(
+          mockCompany,
+          'Master Ledger Audit (Multi-Page)',
+          ['#', 'Date', 'Description', 'Reference', 'Type', 'Debit', 'Credit', 'Balance'],
+          Array.from({ length: 120 }, (_, i) => [
+            String(i + 1),
+            '15/02/2026',
+            `Transaction entry audit record #${i + 1}`,
+            `FH-REF-${1000 + i}`,
+            i % 2 === 0 ? 'Installment' : 'Down Payment',
+            '0',
+            '65,000',
+            `${2670000 - i * 1000}`
+          ]),
+          'Total Entries: 120 | System Verified'
+        )
       }
     };
   }, []);
@@ -337,13 +406,18 @@ export const DevLetterhead: React.FC = () => {
   const navButtons: { key: DocType; label: string }[] = [
     { key: 'plot_agreement', label: '1. Plot Agreement' },
     { key: 'booking_form', label: '2. Booking Form' },
-    { key: 'installment_plan', label: '3. Installment Plan (36-Inst)' },
+    { key: 'installment_plan', label: '3a. Installment Plan (36-Inst)' },
+    { key: 'installment_plan_60', label: '3b. Plan (60-Inst)' },
+    { key: 'installment_plan_120', label: '3c. Plan (120-Inst)' },
     { key: 'payment_receipt', label: '4. Payment Receipt' },
     { key: 'down_payment_receipt', label: '5. Down Payment Receipt' },
     { key: 'possession_receipt', label: '6. On-Possession Receipt' },
     { key: 'customer_ledger', label: '7. Customer Ledger' },
     { key: 'terms_and_conditions', label: '8. Terms & Conditions' },
-    { key: 'single_line_short', label: '9. Single-Line Minimal' }
+    { key: 'single_line_short', label: '9. Single-Line Minimal' },
+    { key: 'report_portrait', label: '10. Report (Portrait)' },
+    { key: 'report_landscape', label: '11. Report (Landscape >8col)' },
+    { key: 'report_multipage', label: '12. Report (Multi-Page 120-rows)' }
   ];
 
   return (
