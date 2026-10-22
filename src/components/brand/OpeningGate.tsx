@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import { Shield, Lock, AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import Logo from '../Logo';
 import { useOpening } from '../../contexts/OpeningContext';
@@ -15,7 +14,6 @@ export const OpeningGate: React.FC = () => {
     setIsConfigured,
   } = useOpening();
 
-  const navigate = useNavigate();
   const shouldReduceMotion = useReducedMotion();
 
   // Mode: 'verify' | 'setup-step1' | 'setup-step2'
@@ -178,7 +176,7 @@ export const OpeningGate: React.FC = () => {
         });
         const setupData = await setupRes.json();
 
-        if (!setupRes.ok || !setupData.ok || !setupData.token) {
+        if (!setupRes.ok || !setupData.ok) {
           triggerShake(setupData.error || 'Failed to save opening password');
           clearInputs();
           setSetupStep('step1');
@@ -187,12 +185,25 @@ export const OpeningGate: React.FC = () => {
           return;
         }
 
-        setIsSuccess(true);
-        setIsConfigured(true);
-        onUnlocked(setupData.token, setupData.exp);
-        setTimeout(() => {
-          navigate('/login');
-        }, 500);
+        // Obtain token via verify
+        const verifyRes = await fetch('/api/opening/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin }),
+        });
+        const verifyData = await verifyRes.json();
+
+        if (verifyRes.ok && verifyData.ok && verifyData.token) {
+          setIsSuccess(true);
+          setIsConfigured(true);
+          setTimeout(() => {
+            onUnlocked(verifyData.token, verifyData.exp);
+          }, 800);
+        } else {
+          setIsConfigured(true);
+          clearInputs();
+          setSetupStep('step1');
+        }
       } catch {
         triggerShake('Network error. Could not connect to server.');
       } finally {
@@ -235,10 +246,9 @@ export const OpeningGate: React.FC = () => {
 
       // Success
       setIsSuccess(true);
-      onUnlocked(data.token, data.exp);
       setTimeout(() => {
-        navigate('/login');
-      }, 500);
+        onUnlocked(data.token, data.exp);
+      }, 700);
     } catch {
       triggerShake('Network error. Unable to verify PIN.');
       clearInputs();
@@ -402,24 +412,23 @@ export const OpeningGate: React.FC = () => {
                           onKeyDown={(e) => handleKeyDown(index, e)}
                           onPaste={index === 0 ? handlePaste : undefined}
                           aria-label={`Digit ${index + 1} of 4`}
-                          className={`w-14 h-16 sm:w-16 sm:h-20 text-center text-3xl font-extrabold rounded-2xl bg-white/10 text-transparent caret-transparent border-2 outline-none transition-all duration-200 select-none ${
+                          className={`w-14 h-16 sm:w-16 sm:h-20 text-center text-3xl font-extrabold rounded-2xl bg-white/10 text-white border-2 outline-none transition-all duration-200 ${
                             isSuccess
-                              ? 'border-emerald-400 bg-emerald-500/20'
+                              ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
                               : isFilled
                               ? 'border-amber-400 bg-white/20 shadow-lg shadow-amber-400/20'
                               : 'border-white/20 focus:border-amber-400 focus:bg-white/15'
                           } disabled:opacity-50`}
                         />
-                        {/* Custom smooth filled dot indicator */}
+                        {/* Dot indicator inside box */}
                         {isFilled && !isSuccess && (
-                          <motion.div
+                          <motion.span
                             initial={{ scale: 0 }}
                             animate={{ scale: 1 }}
-                            transition={{ type: 'spring', stiffness: 500, damping: 28 }}
-                            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                            className="absolute inset-0 flex items-center justify-center pointer-events-none text-amber-300 text-3xl"
                           >
-                            <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-tr from-amber-400 to-amber-300 shadow-md shadow-amber-400/50" />
-                          </motion.div>
+                            *
+                          </motion.span>
                         )}
                       </div>
                     );
