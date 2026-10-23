@@ -5,8 +5,7 @@ import { BrandLoader } from '../../components/brand';
 import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { getCollection, getDocument } from '../../firebase/firestore';
-import { where } from 'firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency } from '../../utils/formatters';
 import type { Plot, Sale, Booking, Customer } from '../../types';
 import gsap from 'gsap';
@@ -52,11 +51,21 @@ const DEMO_FIXTURE_PLOTS: Plot[] = [
 ];
 
 const PlotMap: React.FC = () => {
-  const [plots, setPlots] = useState<Plot[]>([]);
   const [filterBlock, setFilterBlock] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [selected, setSelected] = useState<Plot | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  const [searchParams] = useSearchParams();
+  const isDemo = searchParams.get('demo') === '1' || searchParams.get('demo3d') === '1';
+
+  const { data: livePlots, loading: liveLoading } = useLiveCollection<Plot>('plots');
+  const { data: allSales } = useLiveCollection<Sale>('sales');
+  const { data: allBookings } = useLiveCollection<Booking>('bookings');
+  const { data: allCustomers } = useLiveCollection<Customer>('customers');
+
+  const [demoPlots, setDemoPlots] = useState<Plot[]>(DEMO_FIXTURE_PLOTS);
+  const loading = isDemo ? false : liveLoading;
+  const plots = isDemo ? demoPlots : livePlots;
 
   // Houses toggle (persisted in localStorage, default on)
   const [enableHouses, setEnableHouses] = useState<boolean>(() => {
@@ -71,8 +80,6 @@ const PlotMap: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const plotElementsRef = useRef<Map<string, HTMLElement>>(new Map());
 
-  const [searchParams] = useSearchParams();
-
   const toggleHouses = () => {
     setEnableHouses((prev) => {
       const next = !prev;
@@ -83,7 +90,6 @@ const PlotMap: React.FC = () => {
     });
   };
 
-  const [detailsCache, setDetailsCache] = useState<Record<string, PlotDetails>>({});
   const detailsRef = useRef<HTMLDivElement>(null);
 
   // Hook for celebration build animations & deep links
@@ -93,7 +99,6 @@ const PlotMap: React.FC = () => {
   });
 
   useEffect(() => {
-    const isDemo = searchParams.get('demo') === '1' || searchParams.get('demo3d') === '1';
     if (isDemo) {
       const celebrateTarget = searchParams.get('celebrate');
       const cloned = DEMO_FIXTURE_PLOTS.map((p) => {
@@ -102,8 +107,7 @@ const PlotMap: React.FC = () => {
         }
         return { ...p };
       });
-      setPlots(cloned);
-      setLoading(false);
+      setDemoPlots(cloned);
 
       if (celebrateTarget) {
         const found = cloned.find(
@@ -113,53 +117,17 @@ const PlotMap: React.FC = () => {
           setCelebratingPlotIds([found.id]);
         }
       }
-      return;
     }
+  }, [searchParams, isDemo, setCelebratingPlotIds]);
 
-    getCollection<Plot>('plots').then((data) => {
-      setPlots(data);
-      setLoading(false);
-    });
-  }, [searchParams, setCelebratingPlotIds]);
-
-  const fetchData = async (pid: string) => {
-    try {
-      const [sales, bookings] = await Promise.all([
-        getCollection<Sale>('sales', [where('plotId', '==', pid)]),
-        getCollection<Booking>('bookings', [where('plotId', '==', pid)]),
-      ]);
-      const sale = sales.length > 0 ? sales[0] : null;
-      const booking = bookings.length > 0 ? bookings[0] : null;
-      let customer = null;
-      const customerId = sale?.customerId || booking?.customerId;
-      if (customerId) customer = await getDocument<Customer>('customers', customerId);
-
-      setDetailsCache((prev) => ({ ...prev, [pid]: { loading: false, sale, booking, customer } }));
-    } catch (err) {
-      console.error(err);
-      setDetailsCache((prev) => ({ ...prev, [pid]: { loading: false } }));
-    }
-  };
-
-  useEffect(() => {
-    if (!selected) return;
-    const pid = selected.id;
-    setDetailsCache((prev) => {
-      if (prev[pid]) return prev;
-      fetchData(pid);
-      return { ...prev, [pid]: { loading: true } };
-    });
-  }, [selected]);
-
-  useEffect(() => {
-    if (selected && detailsCache[selected.id] && !detailsCache[selected.id].loading && detailsRef.current) {
-      gsap.fromTo(
-        detailsRef.current.children,
-        { y: 20, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.4, stagger: 0.1, ease: 'power2.out' }
-      );
-    }
-  }, [selected, detailsCache]);
+  const selectedDetails: PlotDetails | null = React.useMemo(() => {
+    if (!selected) return null;
+    const sale = allSales.find(s => s.plotId === selected.id) || null;
+    const booking = allBookings.find(b => b.plotId === selected.id) || null;
+    const customerId = sale?.customerId || booking?.customerId;
+    const customer = customerId ? allCustomers.find(c => c.id === customerId) || null : null;
+    return { loading: false, sale, booking, customer };
+  }, [selected, allSales, allBookings, allCustomers]);
 
   const blocks = [...new Set(plots.map((p) => p.block))].sort();
 
@@ -406,13 +374,9 @@ const PlotMap: React.FC = () => {
                   <span>Customer & Financial Details</span>
                 </h4>
 
-                {detailsCache[selected.id]?.loading ? (
-                  <div className="flex justify-center py-6">
-                    <BrandLoader size={36} />
-                  </div>
-                ) : detailsCache[selected.id]?.sale || detailsCache[selected.id]?.booking ? (
+                {selectedDetails?.sale || selectedDetails?.booking ? (
                   <div ref={detailsRef} className="space-y-3">
-                    {detailsCache[selected.id]?.customer && (
+                    {selectedDetails?.customer && (
                       <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-200/60 flex items-start gap-3">
                         <div className="p-2 bg-amber-100 rounded-lg text-amber-800 mt-0.5">
                           <Home size={16} />
@@ -420,29 +384,29 @@ const PlotMap: React.FC = () => {
                         <div>
                           <div className="text-xs text-amber-800 font-medium">Purchaser</div>
                           <div className="text-sm font-bold text-slate-800">
-                            {detailsCache[selected.id]?.customer?.name}
+                            {selectedDetails.customer.name}
                           </div>
                           <div className="text-xs text-slate-600">
-                            {detailsCache[selected.id]?.customer?.phone}
+                            {selectedDetails.customer.phone}
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {detailsCache[selected.id]?.sale && (
+                    {selectedDetails?.sale && (
                       <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
                         <div>
                           <span className="text-slate-500">Sale Date:</span>{' '}
                           <span className="font-semibold text-slate-800">
                             {new Date(
-                              detailsCache[selected.id]!.sale!.saleDate
+                              selectedDetails.sale.saleDate
                             ).toLocaleDateString()}
                           </span>
                         </div>
                         <div>
                           <span className="text-slate-500">Total Price:</span>{' '}
                           <span className="font-bold text-[#1a3c6e]">
-                            {formatCurrency(detailsCache[selected.id]!.sale!.totalPrice)}
+                            {formatCurrency(selectedDetails.sale.totalPrice)}
                           </span>
                         </div>
                       </div>

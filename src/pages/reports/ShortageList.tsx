@@ -4,7 +4,8 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
 import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
-import { subscribeCollection, getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate, isInstallmentOverdue, daysOverdue, getOutstanding } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Installment, Customer, Plot, Sale, CompanySettings } from '../../types';
@@ -30,40 +31,24 @@ interface ShortageRow {
 const ShortageList: React.FC = () => {
   const navigate = useNavigate();
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
-  const [installments, setInstallments] = useState<Installment[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
+  const { data: installments, loading: loadingInst } = useLiveCollection<Installment>('installments');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
+  const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
   const [company, setCompany] = useState<CompanySettings | null>(null);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [ageFilter, setAgeFilter] = useState<AgeFilter>('all');
   const [filterBlock, setFilterBlock] = useState('');
+  const loading = loadingInst || loadingCust || loadingPlots || loadingSales;
 
   useEffect(() => {
-    const loadStatic = async () => {
-      try {
-        const [c, p, s] = await Promise.all([
-          getCollection<Customer>('customers'),
-          getCollection<Plot>('plots'),
-          getCollection<Sale>('sales'),
-        ]);
-        setCustomers(c);
-        setPlots(p);
-        setSales(s);
-        const comp = await getDocument<CompanySettings>('settings', 'company');
-        if (comp) setCompany(comp);
-      } catch (err) {
-        console.error(err);
-        toast.error('Failed to load shortage list metadata');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadStatic();
-
-    const unsub = subscribeCollection<Installment>('installments', setInstallments);
-    return () => unsub();
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const allRows = useMemo<ShortageRow[]>(() => {
@@ -179,7 +164,7 @@ const ShortageList: React.FC = () => {
       rows,
       `Total Overdue: ${formatCurrency(totalAmount)} | ${filteredRows.length} overdue installments`
     );
-    printContent(html, 'Shortage-List');
+    printContent(html, 'Shortage List');
   };
 
   const handleExportCsv = () => {

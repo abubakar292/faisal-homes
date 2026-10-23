@@ -129,9 +129,11 @@ export const generateCustomerLedgerHTML = (
   `;
 
   return buildLetterheadDocument({
-    sections: [
-      { title: 'Customer Ledger Statement', bodyHtml: section1Html },
-      { title: 'Installment Schedule', bodyHtml: section2Html }
-    ]
+    layout: 'report',
+    report: {
+      title: 'Customer Ledger Statement',
+      subtitle: `Project: ${company.name} | Scope: ${scopeLabel}`,
+      rawHtml: section1Html + '<div class="lh-section-break"></div>' + section2Html
+    }
   });
 };

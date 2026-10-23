@@ -1,6 +1,7 @@
 import { buildLetterheadDocument, type ReceiptItem } from './letterhead';
 import { printDocument } from './printDocument';
 import { formatCurrency, formatDate } from './formatters';
+import { sortInstallments } from './saleCalc';
 import type { Booking, Customer, Plot, Sale, Installment, CompanySettings, DownPaymentTransaction } from '../types';
 
 // ─── Legacy aliases — kept for backward compatibility ─────────────────────────
@@ -156,21 +157,21 @@ thead { display: table-header-group; } tr { page-break-inside: avoid; } .page-br
 // ─── CORE: Universal print function ──────────────────────────────────────────
 
 export function printInNewWindow(htmlContent: string, title: string = 'Print'): void {
-  if (htmlContent.includes('lh-doc') || htmlContent.trim().toLowerCase().startsWith('<!doctype')) {
-    void printDocument(htmlContent);
+  if (!htmlContent.includes('lh-doc')) {
+    if (import.meta.env?.DEV) {
+      console.error('[printUtils] Missing lh-doc marker. Auto-wrapping content in layout report for: ' + title);
+    }
+    const wrapped = buildLetterheadDocument({
+      layout: 'report',
+      report: {
+        title,
+        rawHtml: htmlContent
+      }
+    });
+    void printDocument(wrapped);
     return;
   }
-  const shell = `<!DOCTYPE html>
-<html>
-<head>
-  <title>${title}</title>
-  <style>${PRINT_CSS}</style>
-</head>
-<body>
-  ${htmlContent}
-</body>
-</html>`;
-  void printDocument(shell);
+  void printDocument(htmlContent);
 }
 
 // Legacy alias - keep old callers working
@@ -364,8 +365,9 @@ export function generateScheduleHTML(
   schedule: Installment[],
   company: CompanySettings
 ): string {
-  const paid    = schedule.filter(s => s.status === 'paid');
-  const pending = schedule.filter(s => s.status !== 'paid');
+  const sorted = sortInstallments(schedule);
+  const paid    = sorted.filter(s => s.status === 'paid');
+  const pending = sorted.filter(s => s.status !== 'paid');
   const paidTotal    = paid.reduce((sum, s) => sum + (s.amountPaid || 0), 0);
   const pendingTotal = pending.reduce((sum, s) => sum + (s.amountDue || 0), 0);
 
@@ -379,7 +381,7 @@ export function generateScheduleHTML(
       if (entry.type === 'semi_annual') label = 'Overdue (Semi-Annual)';
       if (entry.type === 'down_payment') label = 'Overdue (Down Payment)';
       if (entry.type === 'on_possession') label = 'Overdue (Possession)';
-      return `<span style="color:#dc2626;font-weight:bold;">${label}</span>`;
+      return '<span style="color:#dc2626;font-weight:bold;">' + label + '</span>';
     }
 
     if (entry.type === 'on_possession') return '<span style="color:#0284c7;font-weight:bold;">On Possession</span>';
@@ -388,16 +390,24 @@ export function generateScheduleHTML(
     return '<span style="color:#64748b;">Pending</span>';
   };
 
+  const typeColumnLabel = (entry: Installment) => {
+    if (entry.type === 'semi_annual') return 'Semi-Annual';
+    if (entry.type === 'on_possession') return 'On Possession';
+    if (entry.type === 'down_payment') return 'Down Payment';
+    return 'Installment';
+  };
+
   const numLabel = (entry: Installment) => {
     if (entry.type === 'down_payment') return 'DP';
-    if (entry.type === 'semi_annual') return 'SA';
+    if (entry.type === 'semi_annual') return 'SA ' + entry.installmentNumber;
     if (entry.type === 'on_possession') return 'Poss.';
-    return String(entry.installmentNumber);
+    return '#' + entry.installmentNumber;
   };
 
   const row = (entry: Installment) => `
     <tr>
       <td style="text-align:center;font-weight:bold;">${numLabel(entry)}</td>
+      <td style="font-weight:600;">${typeColumnLabel(entry)}</td>
       <td>${fmtDate(entry.dueDate)}</td>
       <td style="text-align:right;font-weight:bold;">${fmtAmt(entry.amountDue)}</td>
       <td style="text-align:center;">${statusBadge(entry)}</td>
@@ -405,7 +415,7 @@ export function generateScheduleHTML(
     </tr>
   `;
 
-  const thead = `<thead><tr style="background:#f1f5f9;"><th style="width:40px;text-align:center;">#</th><th>Due Date</th><th style="text-align:right;">Amount</th><th style="text-align:center;">Status</th><th style="text-align:center;">Paid Date</th></tr></thead>`;
+  const thead = '<thead><tr style="background:#f1f5f9;"><th style="width:44px;text-align:center;">#</th><th>Type</th><th>Due Date</th><th style="text-align:right;">Amount</th><th style="text-align:center;">Status</th><th style="text-align:center;">Paid Date</th></tr></thead>';
 
   const content = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
@@ -429,16 +439,16 @@ export function generateScheduleHTML(
     <table class="lh-table lh-installment-table">
       ${thead}
       <tbody>
-        ${schedule.map(row).join('')}
+        ${sorted.map(row).join('')}
       </tbody>
       <tfoot>
         <tr style="background:#f8fafc;font-weight:bold;">
-          <td colspan="2" style="padding:6px 8px;">TOTAL PAID (${paid.length} installments)</td>
+          <td colspan="3" style="padding:6px 8px;">TOTAL PAID (${paid.length} installments)</td>
           <td style="text-align:right;color:#16a34a;">${fmtAmt(paidTotal)}</td>
           <td colspan="2"></td>
         </tr>
         <tr style="background:#f1f5f9;font-weight:bold;">
-          <td colspan="2" style="padding:6px 8px;">REMAINING BALANCE (${pending.length} installments)</td>
+          <td colspan="3" style="padding:6px 8px;">REMAINING BALANCE (${pending.length} installments)</td>
           <td style="text-align:right;color:#dc2626;">${fmtAmt(pendingTotal)}</td>
           <td colspan="2"></td>
         </tr>

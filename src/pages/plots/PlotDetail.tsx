@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pencil, Home } from 'lucide-react';
 import PageHeader from '../../components/ui/PageHeader';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { getDocument, getCollection } from '../../firebase/firestore';
+import { useLiveDocument, useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { consolidateSaleInstallments } from '../../utils/saleCalc';
 import type { Plot, Sale, Customer, Installment } from '../../types';
@@ -12,26 +12,15 @@ import { BrandLoader } from '../../components/brand';
 const PlotDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [plot, setPlot] = useState<Plot | null>(null);
-  const [sale, setSale] = useState<Sale | null>(null);
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const [installments, setInstallments] = useState<Installment[]>([]);
 
-  useEffect(() => {
-    if (!id) return;
-    getDocument<Plot>('plots', id).then(setPlot);
-    getCollection<Sale>('sales').then(sales => {
-      const s = sales.find(s => s.plotId === id);
-      if (s) {
-        setSale(s);
-        getDocument<Customer>('customers', s.customerId).then(setCustomer);
-        getCollection<Installment>('installments').then(insts => {
-          const cleanInsts = consolidateSaleInstallments(insts.filter(i => i.saleId === s.id));
-          setInstallments(cleanInsts);
-        });
-      }
-    });
-  }, [id]);
+  const { data: plot } = useLiveDocument<Plot>('plots', id);
+  const { data: sales } = useLiveCollection<Sale>('sales');
+  const sale = React.useMemo(() => sales.find(s => s.plotId === id) || null, [sales, id]);
+  const { data: customer } = useLiveDocument<Customer>('customers', sale?.customerId);
+  const { data: rawInsts } = useLiveCollection<Installment>('installments', {
+    where: sale?.id ? ['saleId', '==', sale.id] : () => false,
+  });
+  const installments = React.useMemo(() => consolidateSaleInstallments(rawInsts), [rawInsts]);
 
   if (!plot) return <BrandLoader />;
 
@@ -110,7 +99,7 @@ const PlotDetail: React.FC = () => {
             <table className="w-full">
               <thead className="bg-slate-50">
                 <tr>
-                  {['Type / #', 'Due Date', 'Amount Due', 'Amount Paid', 'Status'].map(h =>
+                  {['#', 'Type', 'Due Date', 'Amount Due', 'Amount Paid', 'Status'].map(h =>
                     <th key={h} className="table-th">{h}</th>
                   )}
                 </tr>
@@ -120,11 +109,13 @@ const PlotDetail: React.FC = () => {
                   const isDownPayment = inst.type === 'down_payment';
                   const isSemiAnnual = inst.type === 'semi_annual';
                   const isPossession = inst.type === 'on_possession';
-                  const label = isDownPayment ? '📌 Down Payment' : isSemiAnnual ? '⭐ Semi-Annual' : isPossession ? '🏠 Possession' : `#${inst.installmentNumber}`;
+                  const typeLabel = isDownPayment ? 'Down Payment' : isSemiAnnual ? 'Semi-Annual' : isPossession ? 'On Possession' : 'Installment';
+                  const numLabel = isDownPayment ? 'DP' : isSemiAnnual ? `SA ${inst.installmentNumber}` : isPossession ? 'Poss.' : `#${inst.installmentNumber}`;
                   
                   return (
                     <tr key={inst.id} className="table-row" style={isDownPayment ? { backgroundColor: '#fffbeb', fontWeight: 'bold' } : {}}>
-                      <td className="table-td">{label}</td>
+                      <td className="table-td font-semibold">{numLabel}</td>
+                      <td className="table-td">{typeLabel}</td>
                       <td className="table-td">{formatDate(inst.dueDate)}</td>
                       <td className="table-td">{formatCurrency(inst.amountDue)}</td>
                       <td className="table-td">{formatCurrency(inst.amountPaid)}</td>

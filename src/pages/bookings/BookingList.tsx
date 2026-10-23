@@ -6,18 +6,24 @@ import PageHeader from '../../components/ui/PageHeader';
 import DataTable, { Column } from '../../components/ui/DataTable';
 import StatusBadge from '../../components/ui/StatusBadge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { getCollection, updateDocument, getDocument } from '../../firebase/firestore';
+import { updateDocument } from '../../firebase/firestore';
+import { useLiveCollection, useLiveDocument } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateBookingReceipt } from '../../utils/printUtils';
 import type { Booking, Customer, Plot, CompanySettings } from '../../types';
 
 const BookingList: React.FC = () => {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [company, setCompany] = useState<CompanySettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: rawBookings, loading: l1 } = useLiveCollection<Booking>('bookings');
+  const { data: customers, loading: l2 } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: l3 } = useLiveCollection<Plot>('plots');
+  const { data: company } = useLiveDocument<CompanySettings>('settings', 'company');
+  const loading = l1 || l2 || l3;
+
+  const bookings = useMemo(() => {
+    return [...rawBookings].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [rawBookings]);
+
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,38 +48,20 @@ const BookingList: React.FC = () => {
     });
   }, [bookings, customers, plots, searchQuery, statusFilter]);
 
-  const load = async () => {
-    setLoading(true);
-    const [b, c, p, comp] = await Promise.all([
-      getCollection<Booking>('bookings'),
-      getCollection<Customer>('customers'),
-      getCollection<Plot>('plots'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]);
-    setBookings(b.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    setCustomers(c);
-    setPlots(p);
-    if (comp) setCompany(comp);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const customerName = (id: string) => customers.find(c => c.id === id)?.name || '—';
+  const customerName = (id: string) => customers.find(c => c.id === id)?.name || '-';
   const plotInfo = (id: string) => {
     const p = plots.find(pl => pl.id === id);
-    return p ? `${p.plotNumber} - Block ${p.block}` : '—';
+    return p ? `${p.plotNumber} - Block ${p.block}` : '-';
   };
 
   const handleCancel = async () => {
     if (!cancelId) return;
     try {
       setCancelling(true);
-      const booking = bookings.find(b => b.id === cancelId);
       await updateDocument('bookings', cancelId, { status: 'cancelled' });
-      if (booking) await updateDocument('plots', booking.plotId, { status: 'available' });
+      const targetBooking = bookings.find(b => b.id === cancelId);
+      if (targetBooking) await updateDocument('plots', targetBooking.plotId, { status: 'available' });
       toast.success('Booking cancelled. Plot is now available.');
-      await load();
     } catch { toast.error('Failed to cancel booking'); } finally { setCancelling(false); setCancelId(null); }
   };
 
@@ -83,7 +71,7 @@ const BookingList: React.FC = () => {
     const plot = plots.find(p => p.id === booking.plotId);
     if (!customer || !plot) { toast.error('Customer or plot data missing'); return; }
     const html = generateBookingReceipt(booking, customer, plot, company);
-    printContent(html, `Booking-${booking.receiptNumber}`);
+    printContent(html, 'Booking Form');
   };
 
   const columns: Column<Booking>[] = [

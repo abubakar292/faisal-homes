@@ -4,7 +4,8 @@ import toast from 'react-hot-toast';
 import { Home, Save, X } from 'lucide-react';
 import PageHeader from '../../components/ui/PageHeader';
 import FormField from '../../components/ui/FormField';
-import { addDocument, updateDocument, getDocument, getCollection } from '../../firebase/firestore';
+import { addDocument, updateDocument, getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import type { Plot, PlotCategoryDoc } from '../../types';
 
 interface FormData {
@@ -35,11 +36,10 @@ const AddPlot: React.FC = () => {
   const [form, setForm] = useState<FormData>(defaultForm);
   const [errors, setErrors] = useState<Partial<FormData>>({});
   const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState<PlotCategoryDoc[]>([]);
+  const { data: categories } = useLiveCollection<PlotCategoryDoc>('plotCategories');
   const isEdit = !!id;
 
   useEffect(() => {
-    getCollection<PlotCategoryDoc>('plotCategories').then(setCategories).catch(() => {});
     if (isEdit) {
       getDocument<Plot>('plots', id!).then(plot => {
         if (plot) {

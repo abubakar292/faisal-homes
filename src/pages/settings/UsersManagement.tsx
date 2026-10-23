@@ -5,20 +5,18 @@ import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import FormField from '../../components/ui/FormField';
-import { getCollection, setDocument, updateDocument, deleteDocument } from '../../firebase/firestore';
+import { setDocument, updateDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { useAuth } from '../../contexts/AuthContext';
 import type { AppUser } from '../../types';
 
 const UsersManagement: React.FC = () => {
   const { isAdmin, createUser } = useAuth();
-  const [users, setUsers] = useState<AppUser[]>([]);
+  const { data: users } = useLiveCollection<AppUser>('users');
   const [showModal, setShowModal] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'staff' });
   const [loading, setLoading] = useState(false);
-
-  const load = () => getCollection<AppUser>('users').then(setUsers);
-  useEffect(() => { load(); }, []);
 
   if (!isAdmin) return (
     <div className="card text-center py-16">
@@ -46,7 +44,6 @@ const UsersManagement: React.FC = () => {
       toast.success('User created successfully!');
       setShowModal(false);
       setForm({ name: '', email: '', password: '', role: 'staff' });
-      await load();
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
       if (code === 'auth/email-already-in-use') toast.error('Email already in use');
@@ -59,7 +56,6 @@ const UsersManagement: React.FC = () => {
     try {
       await updateDocument('users', deleteId, { active: false });
       toast.success('User deactivated');
-      await load();
     } catch { toast.error('Failed'); } finally { setDeleteId(null); }
   };
 
@@ -67,7 +63,6 @@ const UsersManagement: React.FC = () => {
     const newRole = user.role === 'admin' ? 'staff' : 'admin';
     await updateDocument('users', user.id, { role: newRole });
     toast.success(`Role changed to ${newRole}`);
-    await load();
   };
 
   return (

@@ -8,9 +8,7 @@ import PageHeader from '../../components/ui/PageHeader';
 import FormField from '../../components/ui/FormField';
 import SearchableSelect from '../../components/ui/SearchableSelect';
 import PrintPrompt from '../../components/ui/PrintPrompt';
-import {
-  getCollection, getDocument, updateDocument,
-} from '../../firebase/firestore';
+import { useLiveCollection, useLiveDocument } from '../../data/liveStore';
 import {
   formatDateInput, parseDateInput, generateReceiptNumber,
   formatCurrency, formatDate, getDaysOverdue,
@@ -24,18 +22,20 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [customers,    setCustomers]    = useState<Customer[]>([]);
-  const [sales,        setSales]        = useState<Sale[]>([]);
-  const [plots,        setPlots]        = useState<Plot[]>([]);
-  const [allInsts,     setAllInsts]     = useState<Installment[]>([]);
-  const [pendingInsts, setPendingInsts] = useState<Installment[]>([]);
-  const [company,      setCompany]      = useState<CompanySettings | null>(null);
+  const { data: customers } = useLiveCollection<Customer>('customers');
+  const { data: rawSales } = useLiveCollection<Sale>('sales');
+  const { data: plots } = useLiveCollection<Plot>('plots');
+  const { data: allInsts } = useLiveCollection<Installment>('installments');
+  const { data: company } = useLiveDocument<CompanySettings>('settings', 'company');
+
+  const sales = React.useMemo(() => rawSales.filter(sa => sa.status === 'active'), [rawSales]);
 
   const [customerId,    setCustomerId]    = useState('');
   const [customerIdInput, setCustomerIdInput] = useState('');
   const [saleId,        setSaleId]        = useState('');
   const [installmentId, setInstallmentId] = useState('');
   const [amountPaid,    setAmountPaid]    = useState('');
+  const [pendingInsts,  setPendingInsts]  = useState<Installment[]>([]);
   
   const [paymentDate,   setPaymentDate]   = useState(formatDateInput(new Date()));
   const [paymentMethod, setPaymentMethod] = useState('Cash');
@@ -50,28 +50,14 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
   const [lastPlot,         setLastPlot]         = useState<Plot | null>(null);
   const [showPrint,        setShowPrint]        = useState(false);
 
-  // ── Load ──
+  // ── Sync URL query parameters ──
   useEffect(() => {
-    Promise.all([
-      getCollection<Customer>('customers'),
-      getCollection<Sale>('sales'),
-      getCollection<Plot>('plots'),
-      getCollection<Installment>('installments'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([c, s, p, i, comp]) => {
-      setCustomers(c);
-      setSales(s.filter(sa => sa.status === 'active'));
-      setPlots(p);
-      setAllInsts(i);
-      if (comp) setCompany(comp);
-
-      const qCust = searchParams.get('customerId');
-      const qSale = searchParams.get('saleId');
-      const qInst = searchParams.get('installmentId');
-      if (qCust) setCustomerId(qCust);
-      if (qSale) setSaleId(qSale);
-      if (qInst) setInstallmentId(qInst);
-    });
+    const qCust = searchParams.get('customerId');
+    const qSale = searchParams.get('saleId');
+    const qInst = searchParams.get('installmentId');
+    if (qCust) setCustomerId(qCust);
+    if (qSale) setSaleId(qSale);
+    if (qInst) setInstallmentId(qInst);
   }, [searchParams]);
 
   // ── Customer ID auto-fill ──
@@ -223,17 +209,10 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
       setLastPlot(selectedPlot || null);
       setShowPrint(true);
 
-      toast.success(`✅ Payment recorded! Receipt: ${receiptNumber}`);
+      toast.success(`Payment recorded! Receipt: ${receiptNumber}`);
 
-      // Refresh installments
-      const refreshed = await getCollection<Installment>('installments');
-      setAllInsts(refreshed);
-      setSales(prev => prev.map(s =>
-        s.id === saleId ? { ...s, remainingAmount: newRemaining, status: newRemaining === 0 ? 'completed' : s.status } : s
-      ));
       setInstallmentId('');
       setAmountPaid('');
-      
       setNotes('');
     } catch (err) {
       console.error(err);
@@ -247,7 +226,7 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
   const handlePrint = () => {
     if (!lastInstallment || !lastCustomer || !lastPlot || !company || !lastSale) return;
     const html = generatePaymentReceipt(lastInstallment, lastCustomer, lastPlot, company, lastSale.remainingAmount, paidSoFar + Number(amountPaid)); // paidSoFar already includes prev payments on this inst
-    printContent(html, `Payment-${lastInstallment.receiptNumber}`);
+    printContent(html, 'Payment Receipt');
   };
 
   return (
@@ -334,12 +313,19 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
                 onChange={e => onInstallmentChange(e.target.value)}
               >
                 <option value="">Select installment...</option>
-                {pendingInsts.map(i => (
-                  <option key={i.id} value={i.id}>
-                    #{i.installmentNumber} — Due: {formatDate(i.dueDate)} — {formatCurrency(i.amountDue - (i.amountPaid || 0))} outstanding
-                    {i.status === 'overdue' ? ' ⚠ OVERDUE' : ''}
-                  </option>
-                ))}
+                {pendingInsts.map(i => {
+                  const typeLabel = i.type === 'semi_annual'
+                    ? `Semi-Annual ${i.installmentNumber} of ${i.totalInstallments || 6}`
+                    : i.type === 'on_possession'
+                    ? 'On Possession'
+                    : `Installment #${i.installmentNumber}`;
+                  return (
+                    <option key={i.id} value={i.id}>
+                      {typeLabel} - Due: {formatDate(i.dueDate)} - {formatCurrency(i.amountDue - (i.amountPaid || 0))} outstanding
+                      {i.status === 'overdue' ? ' [OVERDUE]' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </FormField>
           )}
@@ -347,7 +333,7 @@ const ReceivePayment: React.FC<Props> = ({ possessionMode = false, embedded = fa
           {saleId && pendingInsts.length === 0 && (
             <div className="p-3 rounded-xl text-sm text-center"
               style={{ background: '#dcfce7', color: '#15803d' }}>
-              ✅ All installments for this sale are paid!
+              All installments for this sale are paid!
             </div>
           )}
 

@@ -3,7 +3,8 @@ import { DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
 import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
-import { getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Installment, CompanySettings } from '../../types';
@@ -11,25 +12,20 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { format } from 'date-fns';
 
 const CollectionReport: React.FC = () => {
-  const [installments, setInstallments] = useState<Installment[]>([]);
+  const { data: allInstallments, loading } = useLiveCollection<Installment>('installments');
+  const installments = useMemo(() => allInstallments.filter(inst => inst.status === 'paid'), [allInstallments]);
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      getCollection<Installment>('installments'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([i, comp]) => {
-      setInstallments(i.filter(inst => inst.status === 'paid'));
-      if (comp) setCompany(comp);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      toast.error('Failed to load collection report data');
-      setLoading(false);
-    });
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const filtered = useMemo(() => {
@@ -77,7 +73,7 @@ const CollectionReport: React.FC = () => {
       ['TOTAL', filtered.length.toString(), formatCurrency(grandTotal)],
     ];
     const html = generateReportHTML(company, 'Collection Report', ['Payment Method', 'Count', 'Amount'], rows);
-    printContent(html, 'Collection-Report');
+    printContent(html, 'Collection Report');
   };
 
   const handleExportCSV = () => {

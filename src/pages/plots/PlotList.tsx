@@ -6,7 +6,8 @@ import PageHeader from '../../components/ui/PageHeader';
 import DataTable, { Column } from '../../components/ui/DataTable';
 import StatusBadge from '../../components/ui/StatusBadge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { getCollection, deleteDocument } from '../../firebase/firestore';
+import { deleteDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Plot } from '../../types';
@@ -14,22 +15,12 @@ import type { Plot } from '../../types';
 const PlotList: React.FC = () => {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: plots, loading } = useLiveCollection<Plot>('plots');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [filterBlock, setFilterBlock] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-
-  const load = async () => {
-    setLoading(true);
-    const data = await getCollection<Plot>('plots');
-    setPlots(data);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
 
   const blocks = [...new Set(plots.map(p => p.block))].sort();
   const categories = [...new Set(plots.map(p => p.category))].sort();
@@ -46,7 +37,6 @@ const PlotList: React.FC = () => {
       setDeleting(true);
       await deleteDocument('plots', deleteId);
       toast.success('Plot deleted');
-      await load();
     } catch {
       toast.error('Failed to delete plot');
     } finally {

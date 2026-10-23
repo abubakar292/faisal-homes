@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { subscribeCollection, getDocument, getCollection } from '../../firebase/firestore';
+import { subscribeCollection, getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { where } from 'firebase/firestore';
 import { formatCurrency, formatDate, getWhatsAppUrl } from '../../utils/formatters';
 import { buildCustomerStatement, CustomerStatement } from '../../utils/ledgerStatement';
@@ -30,7 +31,7 @@ const CustomerLedger: React.FC = () => {
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
+  const { data: plots } = useLiveCollection<Plot>('plots');
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [dpTransactions, setDpTransactions] = useState<DownPaymentTransaction[]>([]);
   const [company, setCompany] = useState<CompanySettings | null>(null);
@@ -54,14 +55,12 @@ const CustomerLedger: React.FC = () => {
 
     const loadStatic = async () => {
       try {
-        const [c, p, comp] = await Promise.all([
+        const [c, comp] = await Promise.all([
           getDocument<Customer>('customers', customerId),
-          getCollection<Plot>('plots'),
           getDocument<CompanySettings>('settings', 'company')
         ]);
         if (!c) { setError('Customer not found'); setLoading(false); return; }
         setCustomer(c);
-        setPlots(p);
         if (comp) setCompany(comp);
 
         unsubSales = subscribeCollection<Sale>('sales', (data) => {
@@ -135,7 +134,7 @@ const CustomerLedger: React.FC = () => {
     if (!company) { alert('Company settings required'); return; }
     const scopeLabel = scope === 'all' ? 'All Plots' : (plots.find(p => p.id === activeSales.find(s => s.id === scope)?.plotId)?.plotNumber || 'Plot');
     const html = generateCustomerLedgerHTML(company, st, customer, scopeLabel);
-    printContent(html, `Ledger_${customer.name}`);
+    printContent(html, 'Customer Ledger Statement');
   };
 
   const handleWhatsApp = () => {

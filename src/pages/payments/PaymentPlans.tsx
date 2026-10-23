@@ -6,8 +6,9 @@ import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import FormField from '../../components/ui/FormField';
 import {
-  getCollection, addDocument, updateDocument, deleteDocument, getDocument,
+  addDocument, updateDocument, deleteDocument, getDocument,
 } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { addDays } from 'date-fns';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
@@ -50,19 +51,19 @@ function generateSchedulePDF(
 
   const html = generateReportHTML(
     company || { name: 'Faisal Homes', address: '', phone: '' } as CompanySettings,
-    'INSTALLMENT SCHEDULE',
+    'Installment Schedule',
     ['#', 'Due Date', 'Amount Due', 'Status'],
     rows,
     `Plan: ${plan.name} | Installments: ${plan.numberOfInstallments} | Type: ${plan.installmentType}<br/>` +
     `Total: ${formatCurrency(totalPrice)} | Down: ${formatCurrency(downAmt)} | Remaining: ${formatCurrency(remaining)}`
   );
 
-  printContent(html, 'Schedule');
+  printContent(html, 'Installment Schedule');
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const PaymentPlans: React.FC = () => {
-  const [plans,    setPlans]    = useState<PaymentPlan[]>([]);
+  const { data: plans } = useLiveCollection<PaymentPlan>('paymentPlans');
   const [company,  setCompany]  = useState<CompanySettings | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<PaymentPlan | null>(null);
@@ -75,12 +76,13 @@ const PaymentPlans: React.FC = () => {
   const [pdfPrice,     setPdfPrice]     = useState('');
   const [showPdfModal, setShowPdfModal] = useState(false);
 
-  const load = () => Promise.all([
-    getCollection<PaymentPlan>('paymentPlans'),
-    getDocument<CompanySettings>('settings', 'company'),
-  ]).then(([p, c]) => { setPlans(p); if (c) setCompany(c); });
-
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company').then(c => {
+      if (active && c) setCompany(c);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const openAdd = () => {
     setEditItem(null);
@@ -121,7 +123,6 @@ const PaymentPlans: React.FC = () => {
         await addDocument('paymentPlans', data);
         toast.success('Payment plan created');
       }
-      await load();
       setShowModal(false);
     } catch {
       toast.error('Failed to save');
@@ -135,7 +136,6 @@ const PaymentPlans: React.FC = () => {
     try {
       await deleteDocument('paymentPlans', deleteId);
       toast.success('Plan deleted');
-      await load();
     } catch {
       toast.error('Failed to delete');
     } finally {

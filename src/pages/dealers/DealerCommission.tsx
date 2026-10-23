@@ -8,8 +8,9 @@ import DataTable, { Column } from '../../components/ui/DataTable';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Modal from '../../components/ui/Modal';
 import {
-  getCollection, addDocument, updateDocument, subscribeCollection, getDocument
+  addDocument, updateDocument, subscribeCollection, getDocument
 } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import {
   formatCurrency, formatDate, formatDateTime, formatDateInput, parseDateInput,
 } from '../../utils/formatters';
@@ -119,20 +120,20 @@ const DealerLedgerView: React.FC<LedgerProps> = ({ dealerName, dealerPhone, onBa
     const rows = entries.map(e => [
       formatDate(e.date),
       e.type === 'commission_earned' ? 'Commission Earned' : 'Payment Made',
-      e.plotInfo || '—',
-      e.type === 'commission_earned' ? formatCurrency(e.amount) : '—',
-      e.type === 'payment_made' ? formatCurrency(e.amount) : '—',
+      e.plotInfo || '-',
+      e.type === 'commission_earned' ? formatCurrency(e.amount) : '-',
+      e.type === 'payment_made' ? formatCurrency(e.amount) : '-',
       formatCurrency(e.runningBalance)
     ]);
     
     const html = generateReportHTML(
       comp,
-      `Dealer Ledger — ${dealerName}`,
+      `Dealer Ledger - ${dealerName}`,
       ['Date', 'Type', 'Sale', 'Earned', 'Paid', 'Balance'],
       rows,
       `Total Earned: ${formatCurrency(totalEarned)} | Total Paid: ${formatCurrency(totalPaid)} | Balance Pending: ${formatCurrency(balanceDue)}`
     );
-    printContent(html, `DealerLedger-${dealerName}`);
+    printContent(html, 'Dealer Commission Ledger');
   };
 
   return (
@@ -315,44 +316,20 @@ const DealerLedgerView: React.FC<LedgerProps> = ({ dealerName, dealerPhone, onBa
 // MAIN DEALER COMMISSION PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 const DealerCommission: React.FC = () => {
-  const [commissions, setCommissions] = useState<DC[]>([]);
-  const [sales,       setSales]       = useState<Sale[]>([]);
-  const [plots,       setPlots]       = useState<Plot[]>([]);
-  const [customers,   setCustomers]   = useState<Customer[]>([]);
-  const [ledger,      setLedger]      = useState<DealerLedgerEntry[]>([]);
-  const [loading,     setLoading]     = useState(true);
+  const { data: rawComms, loading: loadingComms } = useLiveCollection<DC>('dealerCommissions');
+  const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: ledger, loading: loadingLedger } = useLiveCollection<DealerLedgerEntry>('dealerLedger');
+
+  const commissions = useMemo(() => {
+    return [...rawComms].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [rawComms]);
+
+  const loading = loadingComms || loadingSales || loadingPlots || loadingCust || loadingLedger;
   const [ledgerDealer, setLedgerDealer] = useState<{ name: string; phone: string } | null>(null);
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    const loadStatic = async () => {
-      setLoading(true);
-      const [s, p, c] = await Promise.all([
-        getCollection<Sale>('sales'),
-        getCollection<Plot>('plots'),
-        getCollection<Customer>('customers'),
-      ]);
-      setSales(s);
-      setPlots(p);
-      setCustomers(c);
-      setLoading(false);
-    };
-    loadStatic();
-
-    const unsubComms = subscribeCollection<DC>('dealerCommissions', (dc) => {
-      setCommissions(dc.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    });
-    
-    const unsubLedger = subscribeCollection<DealerLedgerEntry>('dealerLedger', (l) => {
-      setLedger(l);
-    });
-
-    return () => {
-      unsubComms();
-      unsubLedger();
-    };
-  }, []);
 
   // Open ledger from another page via ?dealerName=<name>
   useEffect(() => {

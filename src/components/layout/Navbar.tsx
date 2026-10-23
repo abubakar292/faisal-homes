@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 import BrandMark from '../brand/BrandMark';
 import { usePWAInstall } from '../../pwa';
+import { useLiveStatus } from '../../data/liveStore';
 
 interface Props {
   onToggleSidebar: () => void;
@@ -16,6 +17,7 @@ interface Props {
 const Navbar: React.FC<Props> = ({ onToggleSidebar, pageTitle = 'Dashboard' }) => {
   const { appUser, currentUser, logout, isAdmin } = useAuth();
   const { canInstall, promptInstall } = usePWAInstall();
+  const { isLive } = useLiveStatus();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -99,6 +101,19 @@ const Navbar: React.FC<Props> = ({ onToggleSidebar, pageTitle = 'Dashboard' }) =
             <span className="hidden sm:inline">Install</span>
           </button>
         )}
+
+        {/* Live indicator (green dot connected, grey offline) */}
+        <div
+          className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] text-white/80 select-none"
+          title={isLive ? 'Live: connected' : 'Offline'}
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isLive ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-slate-400'
+            }`}
+          />
+          <span className="hidden sm:inline font-medium text-[10.5px]">Live</span>
+        </div>
 
         {/* Notification bell */}
         <NotificationBell />

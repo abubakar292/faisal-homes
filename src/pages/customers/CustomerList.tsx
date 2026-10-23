@@ -5,18 +5,28 @@ import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import DataTable, { Column } from '../../components/ui/DataTable';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { getCollection, deleteDocument } from '../../firebase/firestore';
+import { deleteDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Customer } from '../../types';
 
 const CustomerList: React.FC = () => {
   const navigate  = useNavigate();
   const { isAdmin } = useAuth();
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading,   setLoading]   = useState(true);
+  const { data: rawCustomers, loading } = useLiveCollection<Customer>('customers');
   const [deleteId,  setDeleteId]  = useState<string | null>(null);
   const [deleting,  setDeleting]  = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const customers = useMemo(() => {
+    const list = [...rawCustomers];
+    list.sort((a, b) => {
+      const na = parseInt((a.customerId || '').split('-')[2] || '0');
+      const nb = parseInt((b.customerId || '').split('-')[2] || '0');
+      return nb - na; // newest first
+    });
+    return list;
+  }, [rawCustomers]);
 
   const filteredCustomers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -31,28 +41,12 @@ const CustomerList: React.FC = () => {
     );
   }, [customers, searchQuery]);
 
-  const load = async () => {
-    setLoading(true);
-    const data = await getCollection<Customer>('customers');
-    // Sort by customerId numerically
-    data.sort((a, b) => {
-      const na = parseInt((a.customerId || '').split('-')[2] || '0');
-      const nb = parseInt((b.customerId || '').split('-')[2] || '0');
-      return nb - na; // newest first
-    });
-    setCustomers(data);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
-
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
       setDeleting(true);
       await deleteDocument('customers', deleteId);
       toast.success('Customer deleted');
-      await load();
     } catch {
       toast.error('Failed to delete');
     } finally {

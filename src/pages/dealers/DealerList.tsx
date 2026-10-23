@@ -5,19 +5,16 @@ import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import DataTable, { Column } from '../../components/ui/DataTable';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { getCollection, deleteDocument } from '../../firebase/firestore';
+import { deleteDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Dealer } from '../../types';
 
 const DealerList: React.FC = () => {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
-  const [dealers, setDealers] = useState<Dealer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: dealers, loading } = useLiveCollection<Dealer>('dealers');
   const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  const load = async () => { setLoading(true); const d = await getCollection<Dealer>('dealers'); setDealers(d); setLoading(false); };
-  useEffect(() => { load(); }, []);
 
   const columns: Column<Dealer>[] = [
     { key: 'name', label: 'Name', render: r => <span className="font-medium">{r.name}</span> },
@@ -44,7 +41,7 @@ const DealerList: React.FC = () => {
         <DataTable columns={columns} data={dealers} keyField="id"
           searchKeys={['name', 'cnic', 'phone'] as never[]} loading={loading} />
       </div>
-      <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={async () => { if (deleteId) { await deleteDocument('dealers', deleteId); toast.success('Deleted'); await load(); setDeleteId(null); }}} message="Delete this dealer?" />
+      <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={async () => { if (deleteId) { await deleteDocument('dealers', deleteId); toast.success('Deleted'); setDeleteId(null); }}} message="Delete this dealer?" />
     </div>
   );
 };

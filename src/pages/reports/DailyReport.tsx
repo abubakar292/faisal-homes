@@ -3,7 +3,8 @@ import { Calendar } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
 import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
-import { getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Installment, Booking, Sale, Customer, Plot, CompanySettings } from '../../types';
@@ -11,35 +12,22 @@ import type { Installment, Booking, Sale, Customer, Plot, CompanySettings } from
 const DailyReport: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
-  const [installments, setInstallments] = useState<Installment[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
+  const { data: installments, loading: loadingInst } = useLiveCollection<Installment>('installments');
+  const { data: bookings, loading: loadingBookings } = useLiveCollection<Booking>('bookings');
+  const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
   const [company, setCompany] = useState<CompanySettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const loading = loadingInst || loadingBookings || loadingSales || loadingCust || loadingPlots;
 
   useEffect(() => {
-    Promise.all([
-      getCollection<Installment>('installments'),
-      getCollection<Booking>('bookings'),
-      getCollection<Sale>('sales'),
-      getCollection<Customer>('customers'),
-      getCollection<Plot>('plots'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([i, b, s, c, p, comp]) => {
-      setInstallments(i);
-      setBookings(b);
-      setSales(s);
-      setCustomers(c);
-      setPlots(p);
-      if (comp) setCompany(comp);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      toast.error('Failed to load daily report data');
-      setLoading(false);
-    });
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const dayPayments = useMemo(() => {
@@ -104,12 +92,12 @@ const DailyReport: React.FC = () => {
     ]);
     const html = generateReportHTML(
       company,
-      `Daily Report — ${dateRange.start ? formatDate(dateRange.start) : 'All Dates'}`,
+      `Daily Collection Report - ${dateRange.start ? formatDate(dateRange.start) : 'All Dates'}`,
       ['Receipt #', 'Customer', 'Plot', 'Inst #', 'Amount', 'Method'],
       rows,
       `Total Collection: ${formatCurrency(totalCollection)}`
     );
-    printContent(html, 'Daily-Report');
+    printContent(html, 'Daily Collection Report');
   };
 
   const handleExportCsv = () => {

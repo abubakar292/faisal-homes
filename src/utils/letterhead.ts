@@ -37,13 +37,14 @@ export interface ReceiptItem {
 export interface ReportOptions {
   title: string;
   subtitle?: string;
-  headers: string[];
-  rows: (string | number)[][];
+  headers?: string[];
+  rows?: (string | number)[][];
   summary?: string;
   totalsRow?: (string | number)[];
   companyName?: string;
   printDate?: string;
   printedBy?: string;
+  rawHtml?: string;
 }
 
 export interface BuildLetterheadOptions {
@@ -560,24 +561,23 @@ const FIT_ONE_PAGE_SCRIPT = `
       var contentEl = document.querySelector('.lh-content') || document.querySelector('.lh-section');
       if (!contentEl) return;
 
-      var targetMaxBottom = (297 - 58) * 3.779527559;
+      var targetMaxBottom = (297 - 62) * 3.779527559;
 
       function isOverflowing() {
         var rect = contentEl.getBoundingClientRect();
         return rect.bottom > targetMaxBottom;
       }
 
-      if (!isOverflowing()) return;
-
       // (1) Check if installment table exists to split into multi-column
-      var instTable = document.querySelector('.lh-installment-table') || document.querySelector('table.lh-table');
+      var instTable = document.querySelector('.lh-installment-table');
       if (instTable && instTable.querySelectorAll('tbody tr').length > 10) {
         splitTable(instTable, 2);
-        if (!isOverflowing()) return;
-
-        splitTable(instTable, 3);
-        if (!isOverflowing()) return;
+        if (isOverflowing()) {
+          splitTable(instTable, 3);
+        }
       }
+
+      if (!isOverflowing()) return;
 
       // (2) Lower font size stepwise from 10.5pt to 7.5pt
       var fontSizes = ['10pt', '9.5pt', '9pt', '8.5pt', '8pt', '7.5pt'];
@@ -597,13 +597,15 @@ const FIT_ONE_PAGE_SCRIPT = `
         if (!isOverflowing()) return;
       }
 
-      // (4) LAST RESORT only: keep 210mm width, increase page height
-      var rect = contentEl.getBoundingClientRect();
-      var neededMm = Math.ceil(52.4 + (rect.height / 3.779527559) + 62);
-      if (neededMm > 297) {
+      // (4) Adjust page height dynamically so document ALWAYS stays on exactly 1 page
+      var docTable = document.querySelector('table.lh-doc') || document.body;
+      var totalPx = Math.max(docTable.scrollHeight, docTable.getBoundingClientRect().height);
+      var neededMm = Math.ceil(totalPx / 3.779527559) + 6;
+      if (neededMm > 297 || isOverflowing()) {
+        var finalMm = Math.max(neededMm, 297);
         var styleEl = document.createElement('style');
-        styleEl.innerHTML = '@page { size: 210mm ' + neededMm + 'mm !important; margin: 0; }' +
-                            'table.lh-doc { min-height: ' + neededMm + 'mm !important; }' +
+        styleEl.innerHTML = '@page { size: 210mm ' + finalMm + 'mm !important; margin: 0; }' +
+                            'table.lh-doc { min-height: ' + finalMm + 'mm !important; }' +
                             '.lh-footer-fixed { position: fixed; bottom: 0; }';
         document.head.appendChild(styleEl);
       }
@@ -615,7 +617,8 @@ const FIT_ONE_PAGE_SCRIPT = `
 
       var origRows = table.__origRows;
       if (!origRows) {
-        origRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+        var tbody = table.querySelector('tbody');
+        origRows = Array.prototype.slice.call(tbody ? tbody.querySelectorAll('tr') : table.querySelectorAll('tbody tr'));
         table.__origRows = origRows;
       }
 
@@ -624,8 +627,9 @@ const FIT_ONE_PAGE_SCRIPT = `
         container = document.createElement('div');
         container.className = 'lh-multicol-container';
         container.style.display = 'flex';
-        container.style.gap = '8px';
+        container.style.gap = '6px';
         container.style.width = '100%';
+        container.style.boxSizing = 'border-box';
         parent.insertBefore(container, table);
         table.style.display = 'none';
       } else {
@@ -639,24 +643,30 @@ const FIT_ONE_PAGE_SCRIPT = `
         subTable.style.flex = '1';
         subTable.style.fontSize = '8pt';
         subTable.style.marginBottom = '0';
-        subTable.innerHTML = '<thead><tr style=\"background:#f1f5f9;\"><th style=\"width:24px;text-align:center;padding:2px 3px;\">#</th><th style=\"padding:2px 3px;\">Due Date</th><th style=\"text-align:right;padding:2px 3px;\">Amount</th><th style=\"text-align:center;padding:2px 3px;\">Status</th></tr></thead><tbody></tbody>';
-        var tbody = subTable.querySelector('tbody');
+        subTable.style.tableLayout = 'fixed';
+        subTable.style.width = '100%';
+        subTable.style.boxSizing = 'border-box';
+        subTable.innerHTML = '<thead><tr style=\"background:#f1f5f9;\"><th style=\"width:24px;text-align:center;padding:2px 3px;\">#</th><th style=\"width:54px;padding:2px 3px;\">Type</th><th style=\"width:58px;padding:2px 3px;\">Due Date</th><th style=\"text-align:right;padding:2px 3px;\">Amount</th><th style=\"width:42px;text-align:center;padding:2px 3px;\">Status</th></tr></thead><tbody></tbody>';
+        var subTbody = subTable.querySelector('tbody');
 
         var start = col * rowsPerCol;
         var end = Math.min(start + rowsPerCol, origRows.length);
         for (var r = start; r < end; r++) {
           var clone = origRows[r].cloneNode(true);
           var tds = clone.querySelectorAll('td');
-          if (tds.length >= 4) {
-            tds[0].style.padding = '2px 3px';
-            tds[1].style.padding = '2px 3px';
-            tds[2].style.padding = '2px 3px';
-            tds[3].style.padding = '2px 3px';
-            if (tds.length > 4) {
-              tds[4].parentNode.removeChild(tds[4]);
-            }
+          for (var t = 0; t < tds.length; t++) {
+            tds[t].style.padding = '2px 3px';
+            tds[t].style.fontSize = '7.5pt';
           }
-          tbody.appendChild(clone);
+          // Remove any extra columns beyond 5 (e.g. Paid Date)
+          while (tds.length > 5) {
+            var lastTd = tds[tds.length - 1];
+            if (lastTd && lastTd.parentNode) {
+              lastTd.parentNode.removeChild(lastTd);
+            }
+            tds = clone.querySelectorAll('td');
+          }
+          subTbody.appendChild(clone);
         }
         container.appendChild(subTable);
       }
@@ -764,7 +774,7 @@ ${LETTERHEAD_CSS}
   </style>
 </head>
 <body>
-  <div class="lh-page-origin" style="height:297mm;overflow:hidden;position:relative;">
+  <div class="lh-page-origin lh-doc" style="height:297mm;overflow:hidden;position:relative;">
     ${topHalf}
     <div class="lh-cut-line">
       ${scissorsSvg}
@@ -777,13 +787,13 @@ ${LETTERHEAD_CSS}
 }
 
 function buildReportDocumentHTML(opt: ReportOptions, headerCompactUrl: string, logoImgUrl: string): string {
-  const isLandscape = opt.headers.length > 8;
+  const isLandscape = (opt.headers && opt.headers.length > 8) || false;
   const printDateStr = opt.printDate || fmtDateStr(new Date());
   const printedByStr = opt.printedBy ? ` by ${opt.printedBy}` : '';
   const subtitleLine = `${opt.subtitle ? opt.subtitle + ' | ' : ''}Printed on ${printDateStr}${printedByStr}`;
 
-  const theadCols = opt.headers.map((h) => `<th>${h}</th>`).join('');
-  const tbodyRows = opt.rows.map((row) => {
+  const theadCols = (opt.headers || []).map((h) => `<th>${h}</th>`).join('');
+  const tbodyRows = (opt.rows || []).map((row) => {
     const tds = row.map((cell) => `<td>${cell !== undefined && cell !== null ? cell : ''}</td>`).join('');
     return `<tr>${tds}</tr>`;
   }).join('');
@@ -810,9 +820,9 @@ ${isLandscape ? `
 ` : ''}
   </style>
 </head>
-<body>
-  <div class="lh-page-origin ${isLandscape ? 'landscape' : ''}">
-    <table class="lh-report-table-doc" style="width:100%;border-collapse:collapse;">
+<body class="lh-doc">
+  <div class="lh-page-origin lh-doc ${isLandscape ? 'landscape' : ''}">
+    <table class="lh-report-table-doc lh-doc" style="width:100%;border-collapse:collapse;">
       <thead>
         <tr>
           <td style="padding:0;">
@@ -838,6 +848,7 @@ ${isLandscape ? `
       <tbody>
         <tr>
           <td style="padding:4mm 10mm;">
+            ${opt.rawHtml ? opt.rawHtml : `
             <table class="lh-report-table">
               <thead>
                 <tr>${theadCols}</tr>
@@ -847,6 +858,7 @@ ${isLandscape ? `
                 ${totalsHtml}
               </tbody>
             </table>
+            `}
           </td>
         </tr>
       </tbody>
@@ -874,8 +886,22 @@ export function buildLetterheadDocument(options: BuildLetterheadOptions): string
   }
 
   // Handle report layout
-  if (options.layout === 'report' && options.report) {
-    return buildReportDocumentHTML(options.report, headerCompactUrl, logoImgUrl);
+  if (options.layout === 'report') {
+    let reportOpt = options.report;
+    if (!reportOpt && options.sections && options.sections.length > 0) {
+      reportOpt = {
+        title: options.sections[0].title,
+        rawHtml: options.sections.map((s) => `
+          <div class="lh-section">
+            <div class="lh-section-title">${s.title}</div>
+            <div class="lh-content">${s.bodyHtml}</div>
+          </div>
+        `).join('<div class="lh-section-break"></div>')
+      };
+    }
+    if (reportOpt) {
+      return buildReportDocumentHTML(reportOpt, headerCompactUrl, logoImgUrl);
+    }
   }
 
   // Handle standard 'document' layout
@@ -941,8 +967,8 @@ export function buildLetterheadDocument(options: BuildLetterheadOptions): string
 ${LETTERHEAD_CSS}
   </style>
 </head>
-<body>
-  <div class="lh-page-origin">
+<body class="lh-doc">
+  <div class="lh-page-origin lh-doc">
     <div class="lh-notch-title ${isLong ? 'lh-title-sm' : ''}">${section0.title}</div>
     ${footerFixedMarkup}
     <table class="lh-doc">

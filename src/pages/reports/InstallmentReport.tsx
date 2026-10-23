@@ -4,44 +4,36 @@ import toast from 'react-hot-toast';
 import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
 import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Installment, Customer, Plot, CompanySettings } from '../../types';
 
 const InstallmentReport: React.FC = () => {
-  const [installments, setInstallments] = useState<Installment[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
+  const { data: installments, loading: loadingInst } = useLiveCollection<Installment>('installments');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('paid');
-  const [loading, setLoading] = useState(true);
+  const loading = loadingInst || loadingCust || loadingPlots;
 
   useEffect(() => {
-    Promise.all([
-      getCollection<Installment>('installments'),
-      getCollection<Customer>('customers'),
-      getCollection<Plot>('plots'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([i, c, p, comp]) => {
-      setInstallments(i);
-      setCustomers(c);
-      setPlots(p);
-      if (comp) setCompany(comp);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      toast.error('Failed to load installment report data');
-      setLoading(false);
-    });
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
-  const customerName = (id: string) => customers.find(c => c.id === id)?.name || '—';
+  const customerName = (id: string) => customers.find(c => c.id === id)?.name || '-';
   const plotInfo = (id: string) => {
     const p = plots.find(pl => pl.id === id);
-    return p ? `${p.plotNumber} - ${p.block}` : '—';
+    return p ? `${p.plotNumber} - ${p.block}` : '-';
   };
 
   const filtered = useMemo(() => {
@@ -96,7 +88,7 @@ const InstallmentReport: React.FC = () => {
       rows,
       `Total Paid: ${formatCurrency(totalPaid)} | Records: ${filtered.length}`
     );
-    printContent(html, 'Installment-Report');
+    printContent(html, 'Installment Report');
   };
 
   const handleExportCSV = () => {

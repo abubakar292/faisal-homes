@@ -1,10 +1,9 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Bell, AlertCircle, Clock, DollarSign, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getCollection } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, isInstallmentOverdue, getOutstanding } from '../../utils/formatters';
-import { healSalesAndInstallments } from '../../services/saleService';
 import type { Installment, Sale, Customer, Plot } from '../../types';
 
 interface Notification {
@@ -22,9 +21,12 @@ const NotificationBell: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
+
+  const { data: installments } = useLiveCollection<Installment>('installments');
+  const { data: sales } = useLiveCollection<Sale>('sales');
+  const { data: customers } = useLiveCollection<Customer>('customers');
+  const { data: plots } = useLiveCollection<Plot>('plots');
 
   // Close on route change
   useEffect(() => {
@@ -41,131 +43,107 @@ const NotificationBell: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  const generateNotifications = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [installments, sales, customers, plots] = await Promise.all([
-        getCollection<Installment>('installments'),
-        getCollection<Sale>('sales'),
-        getCollection<Customer>('customers'),
-        getCollection<Plot>('plots'),
-      ]);
+  const notifications = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const in7Days = new Date(today);
+    in7Days.setDate(in7Days.getDate() + 7);
 
-      healSalesAndInstallments().catch(console.error);
+    const notifs: Notification[] = [];
+    const customerMap = new Map(customers.map(c => [c.id, c]));
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const in7Days = new Date(today);
-      in7Days.setDate(in7Days.getDate() + 7);
+    // 1. Overdue installments (strictly exclude down payments)
+    const overdueInsts = installments.filter(i => {
+      if (i.type === 'down_payment') return false;
+      if (!isInstallmentOverdue(i)) return false;
+      const sale = sales.find(s => s.id === i.saleId);
+      if (sale?.status === 'cancelled') return false;
+      return true;
+    });
 
-      const notifs: Notification[] = [];
-      const customerMap = new Map(customers.map(c => [c.id, c]));
-      const plotMap = new Map(plots.map(p => [p.id, p]));
+    // Group overdue by customer for cleaner notifications
+    const overdueByCustomer = new Map<string, { count: number; total: number; name: string }>();
+    overdueInsts.forEach(inst => {
+      const c = customerMap.get(inst.customerId);
+      const key = inst.customerId;
+      const existing = overdueByCustomer.get(key) || { count: 0, total: 0, name: c?.name || 'Unknown' };
+      existing.count++;
+      existing.total += getOutstanding(inst);
+      overdueByCustomer.set(key, existing);
+    });
 
-      // 1. Overdue installments (strictly exclude down payments)
-      const overdueInsts = installments.filter(i => {
-        if (i.type === 'down_payment') return false;
-        if (!isInstallmentOverdue(i)) return false;
-        const sale = sales.find(s => s.id === i.saleId);
-        if (sale?.status === 'cancelled') return false;
-        return true;
+    overdueByCustomer.forEach((data, customerId) => {
+      notifs.push({
+        id: `overdue-${customerId}`,
+        type: 'overdue',
+        title: 'Overdue Payments',
+        message: `${data.name} - ${data.count} installment${data.count > 1 ? 's' : ''} (${formatCurrency(data.total)})`,
+        icon: <AlertCircle size={14} />,
+        color: '#dc2626',
+        route: '/reports/shortage-list',
+        isRead: readIds.has(`overdue-${customerId}`),
       });
+    });
 
-      // Group overdue by customer for cleaner notifications
-      const overdueByCustomer = new Map<string, { count: number; total: number; name: string }>();
-      overdueInsts.forEach(inst => {
-        const c = customerMap.get(inst.customerId);
-        const key = inst.customerId;
-        const existing = overdueByCustomer.get(key) || { count: 0, total: 0, name: c?.name || 'Unknown' };
-        existing.count++;
-        existing.total += getOutstanding(inst);
-        overdueByCustomer.set(key, existing);
+    // 2. Due in 7 days
+    const dueSoon = installments.filter(i => {
+      if (i.status === 'paid' || i.type === 'down_payment') return false;
+      const sale = sales.find(s => s.id === i.saleId);
+      if (sale?.status === 'cancelled') return false;
+      const due = new Date(i.dueDate);
+      due.setHours(0, 0, 0, 0);
+      return due >= today && due <= in7Days;
+    });
+
+    if (dueSoon.length > 0) {
+      const totalDueSoon = dueSoon.reduce((s, i) => s + getOutstanding(i), 0);
+      notifs.push({
+        id: 'due-soon-all',
+        type: 'due_soon',
+        title: 'Payments Due Soon',
+        message: `${dueSoon.length} installment${dueSoon.length > 1 ? 's' : ''} due within 7 days (${formatCurrency(totalDueSoon)})`,
+        icon: <Clock size={14} />,
+        color: '#d97706',
+        route: '/reports/pending',
+        isRead: readIds.has('due-soon-all'),
       });
-
-      overdueByCustomer.forEach((data, customerId) => {
-        notifs.push({
-          id: `overdue-${customerId}`,
-          type: 'overdue',
-          title: '🔴 Overdue Payments',
-          message: `${data.name} - ${data.count} installment${data.count > 1 ? 's' : ''} (${formatCurrency(data.total)})`,
-          icon: <AlertCircle size={14} />,
-          color: '#dc2626',
-          route: '/reports/shortage-list',
-          isRead: readIds.has(`overdue-${customerId}`),
-        });
-      });
-
-      // 2. Due in 7 days
-      const dueSoon = installments.filter(i => {
-        if (i.status === 'paid' || i.type === 'down_payment') return false;
-        const sale = sales.find(s => s.id === i.saleId);
-        if (sale?.status === 'cancelled') return false;
-        const due = new Date(i.dueDate);
-        due.setHours(0, 0, 0, 0);
-        return due >= today && due <= in7Days;
-      });
-
-      if (dueSoon.length > 0) {
-        const totalDueSoon = dueSoon.reduce((s, i) => s + getOutstanding(i), 0);
-        notifs.push({
-          id: 'due-soon-all',
-          type: 'due_soon',
-          title: '⏰ Payments Due Soon',
-          message: `${dueSoon.length} installment${dueSoon.length > 1 ? 's' : ''} due within 7 days (${formatCurrency(totalDueSoon)})`,
-          icon: <Clock size={14} />,
-          color: '#d97706',
-          route: '/reports/pending',
-          isRead: readIds.has('due-soon-all'),
-        });
-      }
-
-      // 3. Pending down payments
-      const activeSales = sales.filter(s => s.status !== 'cancelled');
-      const pendingDP = activeSales.filter(s => {
-        if (s.downPaymentStatus === 'complete') return false;
-        const totalRequired = s.downPaymentAmount || 0;
-        const totalReceived = (s.bookingAmountPaid || 0) + (s.downPaymentReceived || 0);
-        const remaining = s.remainingDownPayment !== undefined ? s.remainingDownPayment : Math.max(0, totalRequired - totalReceived);
-        return remaining > 0;
-      });
-
-      if (pendingDP.length > 0) {
-        const totalPendingDP = pendingDP.reduce((s, sale) => {
-          const totalRequired = sale.downPaymentAmount || 0;
-          const totalReceived = (sale.bookingAmountPaid || 0) + (sale.downPaymentReceived || 0);
-          const remaining = sale.remainingDownPayment !== undefined ? sale.remainingDownPayment : Math.max(0, totalRequired - totalReceived);
-          return s + remaining;
-        }, 0);
-        notifs.push({
-          id: 'dp-pending-all',
-          type: 'down_payment_pending',
-          title: '📌 Down Payments Pending',
-          message: `${pendingDP.length} sale${pendingDP.length > 1 ? 's' : ''} with pending down payments (${formatCurrency(totalPendingDP)})`,
-          icon: <DollarSign size={14} />,
-          color: '#0369a1',
-          route: '/payments/down-payments',
-          isRead: readIds.has('dp-pending-all'),
-        });
-      }
-
-      // Sort: overdue first, then due soon, then down payments
-      const priority: Record<string, number> = { overdue: 0, due_soon: 1, down_payment_pending: 2 };
-      notifs.sort((a, b) => priority[a.type] - priority[b.type]);
-
-      setNotifications(notifs);
-    } catch (err) {
-      console.error('Failed to load notifications:', err);
-    } finally {
-      setLoading(false);
     }
-  }, [readIds]);
 
-  useEffect(() => {
-    generateNotifications();
-    // Refresh every 5 minutes
-    const interval = setInterval(generateNotifications, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [generateNotifications]);
+    // 3. Pending down payments
+    const activeSales = sales.filter(s => s.status !== 'cancelled');
+    const pendingDP = activeSales.filter(s => {
+      if (s.downPaymentStatus === 'complete') return false;
+      const totalRequired = s.downPaymentAmount || 0;
+      const totalReceived = (s.bookingAmountPaid || 0) + (s.downPaymentReceived || 0);
+      const remaining = s.remainingDownPayment !== undefined ? s.remainingDownPayment : Math.max(0, totalRequired - totalReceived);
+      return remaining > 0;
+    });
+
+    if (pendingDP.length > 0) {
+      const totalPendingDP = pendingDP.reduce((s, sale) => {
+        const totalRequired = sale.downPaymentAmount || 0;
+        const totalReceived = (sale.bookingAmountPaid || 0) + (sale.downPaymentReceived || 0);
+        const remaining = sale.remainingDownPayment !== undefined ? sale.remainingDownPayment : Math.max(0, totalRequired - totalReceived);
+        return s + remaining;
+      }, 0);
+      notifs.push({
+        id: 'dp-pending-all',
+        type: 'down_payment_pending',
+        title: 'Down Payments Pending',
+        message: `${pendingDP.length} sale${pendingDP.length > 1 ? 's' : ''} with pending down payments (${formatCurrency(totalPendingDP)})`,
+        icon: <DollarSign size={14} />,
+        color: '#0369a1',
+        route: '/payments/down-payments',
+        isRead: readIds.has('dp-pending-all'),
+      });
+    }
+
+    // Sort: overdue first, then due soon, then down payments
+    const priority: Record<string, number> = { overdue: 0, due_soon: 1, down_payment_pending: 2 };
+    notifs.sort((a, b) => priority[a.type] - priority[b.type]);
+
+    return notifs;
+  }, [installments, sales, customers, readIds]);
 
   const unreadCount = useMemo(
     () => notifications.filter(n => !n.isRead).length,
@@ -175,12 +153,10 @@ const NotificationBell: React.FC = () => {
   const markAllRead = () => {
     const allIds = new Set(notifications.map(n => n.id));
     setReadIds(allIds);
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   };
 
   const handleClick = (notif: Notification) => {
     setReadIds(prev => new Set(prev).add(notif.id));
-    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
     navigate(notif.route);
     setIsOpen(false);
   };

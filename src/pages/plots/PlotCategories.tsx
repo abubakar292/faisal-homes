@@ -5,20 +5,17 @@ import PageHeader from '../../components/ui/PageHeader';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import FormField from '../../components/ui/FormField';
-import { getCollection, addDocument, updateDocument, deleteDocument } from '../../firebase/firestore';
+import { addDocument, updateDocument, deleteDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import type { PlotCategoryDoc } from '../../types';
 
 const PlotCategories: React.FC = () => {
-  const [categories, setCategories] = useState<PlotCategoryDoc[]>([]);
+  const { data: categories } = useLiveCollection<PlotCategoryDoc>('plotCategories');
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<PlotCategoryDoc | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', description: '', pricingNote: '' });
   const [loading, setLoading] = useState(false);
-
-  const load = () => getCollection<PlotCategoryDoc>('plotCategories').then(setCategories);
-
-  useEffect(() => { load(); }, []);
 
   const openAdd = () => { setEditItem(null); setForm({ name: '', description: '', pricingNote: '' }); setShowModal(true); };
   const openEdit = (c: PlotCategoryDoc) => { setEditItem(c); setForm({ name: c.name, description: c.description, pricingNote: c.pricingNote }); setShowModal(true); };
@@ -34,7 +31,6 @@ const PlotCategories: React.FC = () => {
         await addDocument('plotCategories', form);
         toast.success('Category added');
       }
-      await load();
       setShowModal(false);
     } catch { toast.error('Failed to save'); } finally { setLoading(false); }
   };
@@ -45,7 +41,6 @@ const PlotCategories: React.FC = () => {
       setLoading(true);
       await deleteDocument('plotCategories', deleteId);
       toast.success('Category deleted');
-      await load();
     } catch { toast.error('Failed to delete'); } finally { setLoading(false); setDeleteId(null); }
   };
 

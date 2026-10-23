@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
 import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate, daysOverdue, getOutstanding, getInstallmentStatus, getWhatsAppUrl } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import { buildCustomerLedgers } from '../../utils/ledger';
@@ -18,54 +19,38 @@ const PendingPaymentsReport: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('installments');
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  const [installments, setInstallments] = useState<Installment[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [dpTx, setDpTx] = useState<DownPaymentTransaction[]>([]);
+  const { data: rawInsts, loading: loadingInst } = useLiveCollection<Installment>('installments');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
+  const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
+  const { data: dpTx, loading: loadingDp } = useLiveCollection<DownPaymentTransaction>('downPaymentTransactions');
   const [company, setCompany] = useState<CompanySettings | null>(null);
+
+  const installments = useMemo(() => {
+    const activeSales = new Set(sales.filter(sale => sale.status !== 'cancelled').map(sale => sale.id));
+    return rawInsts.filter(i => {
+      if (!activeSales.has(i.saleId) || getOutstanding(i) <= 0) return false;
+      if (i.type === 'down_payment') return false;
+      return true;
+    });
+  }, [rawInsts, sales]);
+
+  const loading = loadingInst || loadingCust || loadingPlots || loadingSales || loadingDp;
 
   // Sorting/Pagination for Customers view
   const [sortField, setSortField] = useState('highest_overdue');
   const [page, setPage] = useState(1);
   const itemsPerPage = 25;
 
-  const load = async () => {
-    try {
-      const [insts, cust, plts, s, dp, comp] = await Promise.all([
-        getCollection<Installment>('installments'),
-        getCollection<Customer>('customers'),
-        getCollection<Plot>('plots'),
-        getCollection<Sale>('sales'),
-        getCollection<DownPaymentTransaction>('downPaymentTransactions'),
-        getDocument<CompanySettings>('settings', 'company'),
-      ]);
-
-      const activeSales = new Set(s.filter(sale => sale.status !== 'cancelled').map(sale => sale.id));
-      const activeInsts = insts.filter(i => {
-        if (!activeSales.has(i.saleId) || getOutstanding(i) <= 0) return false;
-        // Down payments have their own tracker and screen (/payments/down-payments)
-        if (i.type === 'down_payment') return false;
-        return true;
-      });
-
-      setInstallments(activeInsts);
-      setCustomers(cust);
-      setPlots(plts);
-      setSales(s);
-      setDpTx(dp);
-      if (comp) setCompany(comp);
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to load pending payments');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const customerInfo = (id: string) => customers.find(c => c.id === id);
   const plotInfo = (id: string) => {
@@ -172,7 +157,7 @@ const PendingPaymentsReport: React.FC = () => {
         rows,
         `Total Outstanding: ${formatCurrency(totalOutstandingAmount)} | ${filteredInsts.length} installments`
       );
-      printContent(html, 'Pending-Payments-Installments');
+      printContent(html, 'Pending Payments Report (Installments)');
     } else {
       const rows = filteredCustomers.map(l => [
         l.customerId,
@@ -191,7 +176,7 @@ const PendingPaymentsReport: React.FC = () => {
         rows,
         `Total Customers: ${filteredCustomers.length}`
       );
-      printContent(html, 'Pending-Payments-Customers');
+      printContent(html, 'Pending Payments Report (Customers)');
     }
   };
 

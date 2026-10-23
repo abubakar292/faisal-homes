@@ -4,7 +4,8 @@ import toast from 'react-hot-toast';
 import StatusBadge from '../../components/ui/StatusBadge';
 import ReportLayout, { exportRowsToCsv, type ReportKpi } from '../../components/reports/ReportLayout';
 import ReportFilters, { type DateRange } from '../../components/ui/ReportFilters';
-import { getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Plot, CompanySettings } from '../../types';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
@@ -16,22 +17,17 @@ const PlotStatusReport: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterBlock, setFilterBlock] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [plots, setPlots] = useState<Plot[]>([]);
+  const { data: plots, loading } = useLiveCollection<Plot>('plots');
   const [company, setCompany] = useState<CompanySettings | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      getCollection<Plot>('plots'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([p, comp]) => {
-      setPlots(p);
-      if (comp) setCompany(comp);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      setLoading(false);
-    });
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const byStatus = (status: string) => plots.filter(p => p.status === status);

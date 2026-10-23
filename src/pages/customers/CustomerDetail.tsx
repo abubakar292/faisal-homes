@@ -3,33 +3,26 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Pencil, Users, Eye, BookOpen } from 'lucide-react';
 import PageHeader from '../../components/ui/PageHeader';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { getDocument, getCollection } from '../../firebase/firestore';
+import { useLiveDocument, useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { consolidateSaleInstallments } from '../../utils/saleCalc';
+import { consolidateSaleInstallments, sortInstallments } from '../../utils/saleCalc';
 import type { Customer, Sale, Plot, Installment } from '../../types';
 import { BrandLoader } from '../../components/brand';
 
 const CustomerDetail: React.FC = () => {
   const { id }   = useParams();
   const navigate = useNavigate();
-  const [customer,     setCustomer]     = useState<Customer | null>(null);
-  const [sales,        setSales]        = useState<Sale[]>([]);
-  const [plots,        setPlots]        = useState<Plot[]>([]);
-  const [installments, setInstallments] = useState<Installment[]>([]);
 
-  useEffect(() => {
-    if (!id) return;
-    getDocument<Customer>('customers', id).then(setCustomer);
-    getCollection<Sale>('sales').then(async allSales => {
-      const mine = allSales.filter(s => s.customerId === id);
-      setSales(mine);
-      const allPlots = await getCollection<Plot>('plots');
-      setPlots(allPlots.filter(p => mine.some(s => s.plotId === p.id)));
-      const allInst  = await getCollection<Installment>('installments');
-      const myInsts = consolidateSaleInstallments(allInst.filter(i => i.customerId === id));
-      setInstallments(myInsts);
-    });
-  }, [id]);
+  const { data: customer } = useLiveDocument<Customer>('customers', id);
+  const { data: sales } = useLiveCollection<Sale>('sales', {
+    where: id ? ['customerId', '==', id] : () => false,
+  });
+  const { data: allPlots } = useLiveCollection<Plot>('plots');
+  const plots = React.useMemo(() => allPlots.filter(p => sales.some(s => s.plotId === p.id)), [allPlots, sales]);
+  const { data: rawInsts } = useLiveCollection<Installment>('installments', {
+    where: id ? ['customerId', '==', id] : () => false,
+  });
+  const installments = React.useMemo(() => consolidateSaleInstallments(rawInsts), [rawInsts]);
 
   if (!customer) {
     return <BrandLoader />;
@@ -219,21 +212,26 @@ const CustomerDetail: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr>
-                {['#','Due Date','Amount Due','Paid','Payment Date','Method','Status'].map(h =>
+                {['#', 'Type', 'Due Date', 'Amount Due', 'Paid', 'Payment Date', 'Method', 'Status'].map(h =>
                   <th key={h} className="table-th">{h}</th>)}
               </tr></thead>
               <tbody>
-                {[...installments].sort((a,b) => a.installmentNumber - b.installmentNumber).map(inst => (
-                  <tr key={inst.id} className="table-row">
-                    <td className="table-td">#{inst.installmentNumber}</td>
-                    <td className="table-td">{formatDate(inst.dueDate)}</td>
-                    <td className="table-td">{formatCurrency(inst.amountDue)}</td>
-                    <td className="table-td font-semibold" style={{ color: '#15803d' }}>{formatCurrency(inst.amountPaid)}</td>
-                    <td className="table-td">{formatDate(inst.paymentDate)}</td>
-                    <td className="table-td">{inst.paymentMethod || '—'}</td>
-                    <td className="table-td"><StatusBadge status={inst.status} size="sm" /></td>
-                  </tr>
-                ))}
+                {sortInstallments(installments).map(inst => {
+                  const typeLabel = inst.type === 'semi_annual' ? 'Semi-Annual' : inst.type === 'on_possession' ? 'On Possession' : inst.type === 'down_payment' ? 'Down Payment' : 'Installment';
+                  const numLabel = inst.type === 'down_payment' ? 'DP' : inst.type === 'semi_annual' ? `SA ${inst.installmentNumber}` : inst.type === 'on_possession' ? 'Poss.' : `#${inst.installmentNumber}`;
+                  return (
+                    <tr key={inst.id} className="table-row">
+                      <td className="table-td font-semibold">{numLabel}</td>
+                      <td className="table-td">{typeLabel}</td>
+                      <td className="table-td">{formatDate(inst.dueDate)}</td>
+                      <td className="table-td">{formatCurrency(inst.amountDue)}</td>
+                      <td className="table-td font-semibold" style={{ color: '#15803d' }}>{formatCurrency(inst.amountPaid)}</td>
+                      <td className="table-td">{formatDate(inst.paymentDate)}</td>
+                      <td className="table-td">{inst.paymentMethod || '-'}</td>
+                      <td className="table-td"><StatusBadge status={inst.status} size="sm" /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

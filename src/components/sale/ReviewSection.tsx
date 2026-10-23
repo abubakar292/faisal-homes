@@ -311,16 +311,16 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
                 {visiblePreview.map((inst, i) => (
                   <tr key={i} className="hover:bg-slate-50/50">
                     <td className="py-2 px-3 font-mono text-slate-500">
-                      {inst.installmentNumber > 0 ? inst.installmentNumber : '—'}
+                      {inst.type === 'down_payment' ? 'DP' : inst.type === 'semi_annual' ? `SA ${inst.installmentNumber}` : inst.type === 'on_possession' ? 'Poss.' : `#${inst.installmentNumber}`}
                     </td>
-                    <td className="py-2 px-3 font-medium text-slate-800 capitalize">
+                    <td className="py-2 px-3 font-medium text-slate-800">
                       {inst.type === 'down_payment'
-                        ? 'Remaining Down Payment'
+                        ? 'Down Payment'
                         : inst.type === 'on_possession'
                         ? 'On Possession'
                         : inst.type === 'semi_annual'
-                        ? 'Semi-Annual Extra'
-                        : 'Regular Installment'}
+                        ? 'Semi-Annual'
+                        : 'Installment'}
                     </td>
                     <td className="py-2 px-3 text-slate-600">
                       {formatDate(inst.dueDate)}

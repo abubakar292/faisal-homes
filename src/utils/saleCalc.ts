@@ -192,6 +192,22 @@ export interface BuildInstallmentsParams {
   semiAnnualAmount?: number;
 }
 
+export function sortInstallments<T extends { dueDate: Date | string; type?: string }>(list: T[]): T[] {
+  const typeRank = (type?: string) => {
+    if (type === 'down_payment') return 0;
+    if (type === 'monthly') return 1;
+    if (type === 'semi_annual') return 2;
+    if (type === 'on_possession') return 3;
+    return 4;
+  };
+  return [...list].sort((a, b) => {
+    const timeA = new Date(a.dueDate).getTime();
+    const timeB = new Date(b.dueDate).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return typeRank(a.type) - typeRank(b.type);
+  });
+}
+
 export function buildInstallments(
   params: BuildInstallmentsParams
 ): Omit<Installment, 'id'>[] {
@@ -212,11 +228,11 @@ export function buildInstallments(
   } = params;
 
   const allInsts: Omit<Installment, 'id'>[] = [];
+  const totalMonths = rows.reduce((s, r) => s + (r.months || 0), 0);
   const regularCount = rows.reduce((s, r) => s + getRowCount(r), 0);
   let instNum = 1;
 
-  // Regular installments: one per interval inside each row
-  // Semi-annual amounts are combined into the corresponding 6th, 12th, 18th... month on the SAME row
+  // 1. Regular monthly installments: one per interval inside each row
   let offset = 0;
   for (const row of rows) {
     const interval = getRowInterval(row);
@@ -229,14 +245,6 @@ export function buildInstallments(
         : row.monthlyAmount;
 
       const monthIndex = offset + k * interval;
-      const isSemiAnnual = semiAnnualEnabled && semiAnnualAmount > 0 && monthIndex % 6 === 0;
-      const totalAmountDue = isSemiAnnual
-        ? baseMonthlyAmount + semiAnnualAmount
-        : baseMonthlyAmount;
-
-      const note = isSemiAnnual
-        ? `Includes Rs. ${semiAnnualAmount.toLocaleString()} Semi-Annual Payment`
-        : '';
 
       allInsts.push({
         receiptNumber: '',
@@ -245,34 +253,62 @@ export function buildInstallments(
         plotId,
         installmentNumber: instNum++,
         totalInstallments: regularCount,
-        type: isSemiAnnual ? 'semi_annual' : 'monthly',
+        type: 'monthly',
         frequency,
         dueDate: addMonths(saleDate, monthIndex),
-        amountDue: totalAmountDue,
+        amountDue: baseMonthlyAmount,
         amountPaid: 0,
         paymentDate: null,
         paymentMethod: '',
         bankName: '',
         chequeNumber: '',
         status: 'pending',
-        notes: note,
+        notes: '',
         createdAt: new Date(),
       });
     }
     offset += row.months;
   }
 
-  // On Possession (if enabled)
+  // 2. Separate semi-annual installments: due on month 6, 12, 18, 24, 30, 36...
+  if (semiAnnualEnabled && semiAnnualAmount > 0) {
+    const semiCount = Math.floor(totalMonths / 6);
+    for (let s = 1; s <= semiCount; s++) {
+      const monthIndex = s * 6;
+      allInsts.push({
+        receiptNumber: '',
+        saleId,
+        customerId,
+        plotId,
+        installmentNumber: s,
+        totalInstallments: semiCount,
+        type: 'semi_annual',
+        frequency: 'Semi-Annual',
+        dueDate: addMonths(saleDate, monthIndex),
+        amountDue: semiAnnualAmount,
+        amountPaid: 0,
+        paymentDate: null,
+        paymentMethod: '',
+        bankName: '',
+        chequeNumber: '',
+        status: 'pending',
+        notes: `Semi-Annual ${s} of ${semiCount}`,
+        createdAt: new Date(),
+      });
+    }
+  }
+
+  // 3. On Possession (if enabled)
   if (onPossessionEnabled && onPossessionAmount > 0) {
-    const totalMonths = rows.reduce((s, r) => s + (r.months || 0), 0);
     allInsts.push({
       receiptNumber: '',
       saleId,
       customerId,
       plotId,
-      installmentNumber: instNum++,
-      totalInstallments: regularCount + 1,
+      installmentNumber: 1,
+      totalInstallments: 1,
       type: 'on_possession',
+      frequency: 'On Possession',
       dueDate: onPossessionDate || addMonths(saleDate, totalMonths),
       amountDue: onPossessionAmount,
       amountPaid: 0,
@@ -286,115 +322,41 @@ export function buildInstallments(
     });
   }
 
-  return allInsts;
+  // 4. Down Payment row (if explicitly included)
+  if (includeRemainingDownPayment && remainingDownPayment > 0) {
+    allInsts.push({
+      receiptNumber: '',
+      saleId,
+      customerId,
+      plotId,
+      installmentNumber: 0,
+      totalInstallments: 1,
+      type: 'down_payment',
+      frequency: 'Down Payment',
+      dueDate: new Date(saleDate),
+      amountDue: remainingDownPayment,
+      amountPaid: 0,
+      paymentDate: null,
+      paymentMethod: '',
+      bankName: '',
+      chequeNumber: '',
+      status: 'pending',
+      notes: 'Remaining Down Payment',
+      createdAt: new Date(),
+    });
+  }
+
+  return sortInstallments(allInsts);
 }
 
 /**
- * Consolidates installments for a sale so that:
- * 1. Down payments are NEVER included as installment rows.
- * 2. Separate semi-annual installments (e.g. 42 rows) are merged into the corresponding
- *    monthly row for month 6, 12, 18, 24, 30, 36, producing exactly 36 monthly rows.
- * 3. Installment numbers are sequential (1..36) and totalInstallments is 36.
+ * Normalizes installments for a sale so that:
+ * 1. Down payments are excluded as regular installment rows.
+ * 2. All installment rows are preserved (never grouped or merged).
+ * 3. Rows are sorted by due date, then monthly before semi-annual.
  */
 export function consolidateSaleInstallments(rawList: Installment[]): Installment[] {
   if (!rawList || !Array.isArray(rawList) || rawList.length === 0) return [];
-
-  // 1. Exclude any down payment rows completely
   const validInsts = rawList.filter(i => i && i.type !== 'down_payment');
-
-  // Separate possession from regular installments
-  const possessionInsts = validInsts.filter(i => i.type === 'on_possession');
-  const regularInsts = validInsts.filter(i => i.type !== 'on_possession');
-
-  // Check if we have separate semi-annual rows that need to be merged
-  const monthlyList = regularInsts.filter(i => i.type === 'monthly');
-  const separateSemiList = regularInsts.filter(i => i.type === 'semi_annual');
-
-  let mergedRegular: Installment[] = [];
-
-  // If there are separate semi-annual rows alongside monthly rows (e.g. 36 monthly + 6 semi = 42 rows)
-  if (separateSemiList.length > 0 && monthlyList.length > 0 && regularInsts.length > monthlyList.length) {
-    // Sort monthly by due date or installmentNumber
-    const sortedMonthly = [...monthlyList].sort((a, b) => {
-      const timeA = new Date(a.dueDate).getTime();
-      const timeB = new Date(b.dueDate).getTime();
-      return timeA - timeB;
-    });
-
-    // Unmatched semi-annuals queue
-    const remainingSemi = [...separateSemiList];
-
-    mergedRegular = sortedMonthly.map((mInst, idx) => {
-      const monthNumber = idx + 1;
-      const mDate = new Date(mInst.dueDate);
-      const mKey = `${mDate.getFullYear()}-${mDate.getMonth()}`;
-
-      // Check if this month matches a semi-annual installment
-      // Matches either by month/year key or by being month 6, 12, 18, 24, 30, 36
-      let matchIdx = remainingSemi.findIndex(s => {
-        const sDate = new Date(s.dueDate);
-        return `${sDate.getFullYear()}-${sDate.getMonth()}` === mKey;
-      });
-
-      if (matchIdx === -1 && monthNumber % 6 === 0 && remainingSemi.length > 0) {
-        matchIdx = 0; // Take the next available semi-annual
-      }
-
-      if (matchIdx !== -1) {
-        const [matchedSemi] = remainingSemi.splice(matchIdx, 1);
-        const combinedDue = (mInst.amountDue || 0) + (matchedSemi.amountDue || 0);
-        const combinedPaid = (mInst.amountPaid || 0) + (matchedSemi.amountPaid || 0);
-        const isPaid = combinedPaid >= combinedDue && combinedDue > 0;
-        const isPartial = combinedPaid > 0 && !isPaid;
-
-        const semiNote = `Includes Rs. ${(matchedSemi.amountDue || 0).toLocaleString('en-PK')} Semi-Annual Payment`;
-        const existingNote = mInst.notes ? `${mInst.notes}; ` : '';
-
-        return {
-          ...mInst,
-          amountDue: combinedDue,
-          amountPaid: combinedPaid,
-          type: 'semi_annual' as const,
-          notes: existingNote ? `${existingNote}${semiNote}` : semiNote,
-          status: isPaid ? ('paid' as const) : isPartial ? ('partial' as const) : mInst.status,
-          paymentDate: isPaid ? (mInst.paymentDate || matchedSemi.paymentDate || new Date()) : (mInst.paymentDate || null),
-        };
-      }
-
-      return { ...mInst };
-    });
-
-    // If any unmatched semi-annual remains, append them
-    if (remainingSemi.length > 0) {
-      mergedRegular.push(...remainingSemi);
-    }
-  } else {
-    // Already combined or purely monthly / purely semi-annual
-    mergedRegular = [...regularInsts];
-  }
-
-  // Sort chronologically by dueDate
-  mergedRegular.sort((a, b) => {
-    const timeA = new Date(a.dueDate).getTime();
-    const timeB = new Date(b.dueDate).getTime();
-    return timeA - timeB;
-  });
-
-  const totalRegularCount = mergedRegular.length;
-  const totalCount = totalRegularCount + possessionInsts.length;
-
-  // Re-number 1..N
-  const finalRegular = mergedRegular.map((inst, idx) => ({
-    ...inst,
-    installmentNumber: idx + 1,
-    totalInstallments: totalCount,
-  }));
-
-  const finalPossession = possessionInsts.map((inst, idx) => ({
-    ...inst,
-    installmentNumber: totalRegularCount + idx + 1,
-    totalInstallments: totalCount,
-  }));
-
-  return [...finalRegular, ...finalPossession];
+  return sortInstallments(validInsts);
 }

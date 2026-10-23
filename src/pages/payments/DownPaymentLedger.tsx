@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Printer, CreditCard, DollarSign } from 'lucide-react';
-import { getDocument, getCollection, subscribeCollection } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveDocument, useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { printInNewWindow, generateDownPaymentReceiptHTML } from '../../utils/printUtils';
+import { printInNewWindow, generateDownPaymentReceiptHTML, generateReportHTML } from '../../utils/printUtils';
 import type { Sale, Customer, Plot, DownPaymentTransaction, CompanySettings } from '../../types';
 import { BrandLoader } from '../../components/brand';
 
@@ -12,48 +13,31 @@ const DownPaymentLedger: React.FC = () => {
   const [searchParams] = useSearchParams();
   const saleId = searchParams.get('saleId') || '';
 
-  const [sale, setSale]           = useState<Sale | null>(null);
-  const [customer, setCustomer]   = useState<Customer | null>(null);
-  const [plot, setPlot]           = useState<Plot | null>(null);
-  const [company, setCompany]     = useState<CompanySettings | null>(null);
-  const [txns, setTxns]           = useState<DownPaymentTransaction[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const { data: sale, loading: loadingSale } = useLiveDocument<Sale>('sales', saleId);
+  const { data: customer, loading: loadingCust } = useLiveDocument<Customer>('customers', sale?.customerId);
+  const { data: plot, loading: loadingPlot } = useLiveDocument<Plot>('plots', sale?.plotId);
+  const { data: rawTxns, loading: loadingTxns } = useLiveCollection<DownPaymentTransaction>('downPaymentTransactions');
+  const [company, setCompany] = useState<CompanySettings | null>(null);
+
+  const txns = useMemo(() => {
+    return rawTxns
+      .filter(t => t.saleId === saleId)
+      .sort((a, b) => new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime());
+  }, [rawTxns, saleId]);
 
   useEffect(() => {
-    if (!saleId) { setLoading(false); return; }
-
-    const loadStatic = async () => {
-      const s = await getDocument<Sale>('sales', saleId);
-      if (!s) { setLoading(false); return; }
-      setSale(s);
-
-      const [cust, pl, comp] = await Promise.all([
-        getDocument<Customer>('customers', s.customerId),
-        getDocument<Plot>('plots', s.plotId),
-        getDocument<CompanySettings>('settings', 'company'),
-      ]);
-      setCustomer(cust);
-      setPlot(pl);
-      if (comp) setCompany(comp);
-      setLoading(false);
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
     };
+  }, []);
 
-    loadStatic();
-
-    // Real-time transactions
-    const unsub = subscribeCollection<DownPaymentTransaction>(
-      'downPaymentTransactions',
-      (data) => {
-        setTxns(
-          data
-            .filter(t => t.saleId === saleId)
-            .sort((a, b) => new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime())
-        );
-      }
-    );
-
-    return () => unsub();
-  }, [saleId]);
+  const loading = !saleId ? false : (loadingSale || loadingCust || loadingPlot || loadingTxns);
 
   if (loading) {
     return <BrandLoader />;
@@ -78,96 +62,41 @@ const DownPaymentLedger: React.FC = () => {
   else if (receivedSoFar > 0) dpStatus = 'partial';
   else                        dpStatus = 'pending';
 
-  const statusLabel = dpStatus === 'complete' ? '✅ Fully Paid' : dpStatus === 'partial' ? '🔄 Partially Paid' : '❌ Not Started';
+  const statusLabel = dpStatus === 'complete' ? 'Fully Paid' : dpStatus === 'partial' ? 'Partially Paid' : 'Not Started';
   const statusColor = dpStatus === 'complete' ? '#16a34a' : dpStatus === 'partial' ? '#b45309' : '#b91c1c';
 
   const handlePrintLedger = () => {
     if (!company) return;
-    let txRows = `
-      <tr style="background:#fffbeb;">
-        <td style="padding:5px 8px;">📌 Booking Amount</td>
-        <td>Cash</td>
-        <td style="text-align:right;font-weight:bold;">${formatCurrency(bookingPaid)}</td>
-        <td>${formatDate(sale.saleDate)}</td>
-        <td style="color:#666;font-size:10px;">Auto-entry from booking</td>
-      </tr>
-    `;
-    let running = bookingPaid;
+    const rows: (string | number)[][] = [
+      ['Booking Amount', 'Cash', formatCurrency(bookingPaid), formatDate(sale.saleDate), 'Auto-entry from booking']
+    ];
     txns.forEach(tx => {
-      running += tx.amount;
-      txRows += `
-        <tr>
-          <td style="padding:5px 8px;">✅ Down Payment Received</td>
-          <td>${tx.paymentMethod}${tx.bankName ? ` - ${tx.bankName}` : ''}</td>
-          <td style="text-align:right;font-weight:bold;color:#16a34a;">${formatCurrency(tx.amount)}</td>
-          <td>${formatDate(tx.paymentDate)}</td>
-          <td style="color:#666;">${tx.notes || '—'}</td>
-        </tr>
-      `;
+      rows.push([
+        'Down Payment Received',
+        `${tx.paymentMethod}${tx.bankName ? ' - ' + tx.bankName : ''}`,
+        formatCurrency(tx.amount),
+        formatDate(tx.paymentDate),
+        tx.notes || '-'
+      ]);
     });
     if (stillPending > 0) {
-      txRows += `
-        <tr style="background:#fef2f2;">
-          <td style="padding:5px 8px;color:#b91c1c;">⏳ Remaining Pending</td>
-          <td>—</td>
-          <td style="text-align:right;font-weight:bold;color:#b91c1c;">${formatCurrency(stillPending)}</td>
-          <td>Due: ASAP</td>
-          <td>—</td>
-        </tr>
-      `;
+      rows.push([
+        'Remaining Pending',
+        '-',
+        formatCurrency(stillPending),
+        'Due: ASAP',
+        '-'
+      ]);
     }
 
-    const html = `
-      <div style="background:#1a3c6e;color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-size:16px;font-weight:bold;">${company.name}</div>
-          <div style="font-size:9px;opacity:0.85;">${company.address} | ${company.phone}</div>
-        </div>
-        <div style="text-align:right;font-size:9px;opacity:0.85;">Print Date: ${formatDate(new Date())}</div>
-      </div>
-      <div style="background:#e8a020;color:white;text-align:center;padding:6px;font-size:13px;font-weight:bold;letter-spacing:1px;margin-bottom:10px;">
-        DOWN PAYMENT LEDGER
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-        <div style="border:1px solid #e2e8f0;padding:8px;border-radius:4px;">
-          <div style="font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #1a3c6e;padding-bottom:4px;margin-bottom:6px;">CUSTOMER</div>
-          <p style="font-weight:bold;">${customer.name}</p>
-          <p style="color:#666;font-size:10px;">${customer.customerId} | ${customer.phone}</p>
-        </div>
-        <div style="border:1px solid #e2e8f0;padding:8px;border-radius:4px;">
-          <div style="font-size:10px;color:#666;font-weight:bold;border-bottom:1px solid #1a3c6e;padding-bottom:4px;margin-bottom:6px;">PLOT</div>
-          <p style="font-weight:bold;">Plot ${plot.plotNumber}, Block ${plot.block}</p>
-          <p style="color:#666;font-size:10px;">${plot.size} ${plot.sizeUnit}</p>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
-        <div style="border:1px solid #e2e8f0;padding:8px;text-align:center;border-radius:4px;">
-          <p style="font-size:9px;color:#666;">Total Down Payment</p>
-          <p style="font-weight:bold;color:#1a3c6e;">${formatCurrency(totalDownPayment)}</p>
-        </div>
-        <div style="border:1px solid #e2e8f0;padding:8px;text-align:center;border-radius:4px;">
-          <p style="font-size:9px;color:#666;">Received So Far</p>
-          <p style="font-weight:bold;color:#16a34a;">${formatCurrency(bookingPaid + receivedSoFar)}</p>
-        </div>
-        <div style="border:1px solid #e2e8f0;padding:8px;text-align:center;border-radius:4px;background:${stillPending > 0 ? '#fef2f2' : '#dcfce7'};">
-          <p style="font-size:9px;color:#666;">Still Pending</p>
-          <p style="font-weight:bold;color:${stillPending > 0 ? '#b91c1c' : '#16a34a'};">${formatCurrency(stillPending)}</p>
-        </div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:11px;">
-        <thead>
-          <tr>
-            <th style="background:#1a3c6e;color:white;padding:5px 8px;text-align:left;">Description</th>
-            <th style="background:#1a3c6e;color:white;padding:5px 8px;text-align:left;">Method</th>
-            <th style="background:#1a3c6e;color:white;padding:5px 8px;text-align:right;">Amount</th>
-            <th style="background:#1a3c6e;color:white;padding:5px 8px;text-align:left;">Date</th>
-            <th style="background:#1a3c6e;color:white;padding:5px 8px;text-align:left;">Notes</th>
-          </tr>
-        </thead>
-        <tbody>${txRows}</tbody>
-      </table>
-    `;
-    printInNewWindow(html, `Down Payment Ledger — ${customer.name}`);
+    const html = generateReportHTML(
+      company,
+      'Down Payment Ledger',
+      ['Description', 'Method', 'Amount', 'Date', 'Notes'],
+      rows,
+      `Customer: ${customer.name} (${customer.customerId}) | Plot: ${plot.plotNumber}, Block ${plot.block} (${plot.size} ${plot.sizeUnit}) | Total Down Payment: ${formatCurrency(totalDownPayment)} | Received: ${formatCurrency(bookingPaid + receivedSoFar)} | Pending: ${formatCurrency(stillPending)}`
+    );
+    printInNewWindow(html, 'Down Payment Ledger');
   };
 
   return (

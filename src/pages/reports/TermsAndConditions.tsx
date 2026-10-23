@@ -20,7 +20,7 @@ const TermsAndConditions: React.FC = () => {
     
     const termsHtml = `
       <div style="font-size:10.5pt;line-height:1.8;white-space:pre-wrap;color:#334155;padding:10px 0;">
-        \${company.termsAndConditions || 'No terms and conditions specified.'}
+        ${company.termsAndConditions || 'No terms and conditions specified.'}
       </div>
     `;
     const docHtml = buildLetterheadDocument({

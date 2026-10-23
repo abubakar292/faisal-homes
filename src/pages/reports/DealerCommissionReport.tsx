@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import StatusBadge from '../../components/ui/StatusBadge';
 import ReportLayout, { exportRowsToCsv, type ReportKpi } from '../../components/reports/ReportLayout';
 import ReportFilters, { type DateRange } from '../../components/ui/ReportFilters';
-import { getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type {
@@ -15,36 +16,26 @@ import type {
 const DealerCommissionReport: React.FC = () => {
   const navigate = useNavigate();
 
-  const [dealers, setDealers] = useState<Dealer[]>([]);
-  const [commissions, setCommissions] = useState<DealerCommission[]>([]);
-  const [ledger, setLedger] = useState<DealerLedgerEntry[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
+  const { data: dealers, loading: loadingDealers } = useLiveCollection<Dealer>('dealers');
+  const { data: commissions, loading: loadingComms } = useLiveCollection<DealerCommission>('dealerCommissions');
+  const { data: ledger, loading: loadingLedger } = useLiveCollection<DealerLedgerEntry>('dealerLedger');
+  const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [filterDealer, setFilterDealer] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const loading = loadingDealers || loadingComms || loadingLedger || loadingSales || loadingCust || loadingPlots;
 
   useEffect(() => {
-    Promise.all([
-      getCollection<Dealer>('dealers'),
-      getCollection<DealerCommission>('dealerCommissions'),
-      getCollection<DealerLedgerEntry>('dealerLedger'),
-      getCollection<Sale>('sales'),
-      getCollection<Customer>('customers'),
-      getCollection<Plot>('plots'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([d, dc, l, s, c, p, comp]) => {
-      setDealers(d); setCommissions(dc); setLedger(l);
-      setSales(s); setCustomers(c); setPlots(p);
-      if (comp) setCompany(comp);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      setLoading(false);
-    });
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   // Records store dealerName (sometimes with empty dealerId) — resolve to a dealer object

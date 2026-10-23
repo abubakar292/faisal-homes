@@ -4,18 +4,24 @@ import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import DataTable, { Column } from '../../components/ui/DataTable';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generatePaymentReceipt } from '../../utils/printUtils';
 import type { Installment, Customer, Plot, Sale, CompanySettings } from '../../types';
 
 const PaymentHistory: React.FC = () => {
-  const [installments, setInstallments] = useState<Installment[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
+  const { data: rawInstallments, loading: loadingInst } = useLiveCollection<Installment>('installments');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
+  const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
   const [company, setCompany] = useState<CompanySettings | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  const installments = useMemo(() => {
+    return [...rawInstallments].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [rawInstallments]);
+
+  const loading = loadingInst || loadingCust || loadingPlots || loadingSales;
   const [filterMethod, setFilterMethod] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -29,20 +35,11 @@ const PaymentHistory: React.FC = () => {
   const [showPrint, setShowPrint]     = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      getCollection<Installment>('installments'),
-      getCollection<Customer>('customers'),
-      getCollection<Plot>('plots'),
-      getCollection<Sale>('sales'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([i, c, p, s, comp]) => {
-      setInstallments(i.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-      setCustomers(c);
-      setPlots(p);
-      setSales(s);
-      if (comp) setCompany(comp);
-      setLoading(false);
-    });
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company').then(comp => {
+      if (active && comp) setCompany(comp);
+    }).catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const filtered = useMemo(() => {
@@ -88,7 +85,7 @@ const PaymentHistory: React.FC = () => {
       .reduce((s, i) => s + (i.amountPaid || 0), 0);
 
     const html = generatePaymentReceipt(inst, customer, plot, company, sale.remainingAmount, allInstsPaid);
-    printContent(html, `Payment-${inst.receiptNumber}`);
+    printContent(html, 'Payment Receipt');
   };
 
   const columns: Column<Installment>[] = [

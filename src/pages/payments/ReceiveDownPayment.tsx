@@ -1,20 +1,17 @@
 import { db } from '../../firebase/config';
 import { writeBatch, doc, collection, query, where, getDocs } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreditCard, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import FormField from '../../components/ui/FormField';
 import SearchableSelect from '../../components/ui/SearchableSelect';
-import {
-  getCollection, getDocument, addDocument, updateDocument,
-} from '../../firebase/firestore';
+import { useLiveCollection, useLiveDocument } from '../../data/liveStore';
 import {
   formatDateInput, parseDateInput, generateReceiptNumber, formatCurrency,
 } from '../../utils/formatters';
 import { printInNewWindow, generateDownPaymentReceiptHTML } from '../../utils/printUtils';
-import { healSalesAndInstallments } from '../../services/saleService';
 import type { Sale, Customer, Plot, DownPaymentTransaction, CompanySettings } from '../../types';
 
 interface Props { embedded?: boolean; }
@@ -24,10 +21,14 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
   const [searchParams] = useSearchParams();
   const prefilledSaleId = searchParams.get('saleId') || '';
 
-  const [sales, setSales]         = useState<Sale[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots]         = useState<Plot[]>([]);
-  const [company, setCompany]     = useState<CompanySettings | null>(null);
+  const { data: rawSales } = useLiveCollection<Sale>('sales');
+  const { data: customers } = useLiveCollection<Customer>('customers');
+  const { data: plots } = useLiveCollection<Plot>('plots');
+  const { data: company } = useLiveDocument<CompanySettings>('settings', 'company');
+
+  const sales = useMemo(() => {
+    return rawSales.filter(sa => sa.status === 'active');
+  }, [rawSales]);
 
   // Customer selection
   const [customerIdInput, setCustomerIdInput] = useState('');
@@ -42,23 +43,6 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
   const [chequeNumber, setChequeNumber]   = useState('');
   const [notes, setNotes]                 = useState('');
   const [loading, setLoading]             = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      const [s, c, p, comp] = await Promise.all([
-        getCollection<Sale>('sales'),
-        getCollection<Customer>('customers'),
-        getCollection<Plot>('plots'),
-        getDocument<CompanySettings>('settings', 'company'),
-      ]);
-      setSales(s.filter(sa => sa.status === 'active'));
-      setCustomers(c);
-      setPlots(p);
-      if (comp) setCompany(comp);
-      healSalesAndInstallments().catch(console.error);
-    };
-    load();
-  }, []);
 
   // Pre-fill from URL
   useEffect(() => {
@@ -185,7 +169,15 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
       );
       instSnap.forEach(d => {
         if (newPending === 0) {
-          batch.delete(d.ref);
+          batch.update(d.ref, {
+            status: 'paid',
+            amountPaid: d.data().amountDue || newReceived,
+            paymentDate: paidDate,
+            paymentMethod: paymentMethod,
+            bankName: bankName.trim(),
+            chequeNumber: chequeNumber.trim(),
+            receiptNumber: receiptNumber,
+          });
         } else {
           batch.update(d.ref, {
             status: 'partial',
@@ -200,7 +192,6 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
       });
 
       await batch.commit();
-      healSalesAndInstallments().catch(console.error);
 
       // Print receipt
       if (company) {
@@ -216,7 +207,7 @@ const ReceiveDownPayment: React.FC<Props> = ({ embedded = false }) => {
           updatedSale,
           company
         );
-        printInNewWindow(html, `Down Payment Receipt — ${receiptNumber}`);
+        printInNewWindow(html, 'Down Payment Receipt');
       }
 
       toast.success(`✅ Down payment received! Receipt: ${receiptNumber}`);

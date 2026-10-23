@@ -12,7 +12,7 @@ import {
 import StatCard from '../components/ui/StatCard';
 import StatusBadge from '../components/ui/StatusBadge';
 import { StatCardSkeleton } from '../components/ui/Skeleton';
-import { getCollection } from '../firebase/firestore';
+import { useLiveCollection } from '../data/liveStore';
 import {  formatCurrency, formatDate, getDaysOverdue, getWhatsAppUrl , isInstallmentOverdue, getOutstanding } from '../utils/formatters';
 import type { Plot, Installment, Sale, Customer } from '../types';
 import { isAfter, addDays, isBefore, addMonths, subMonths, format } from 'date-fns';
@@ -21,11 +21,11 @@ import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 const PIE_COLORS = ['#22c55e', '#e8a020', '#3b82f6', '#ef4444'];
 
 const Dashboard: React.FC = () => {
-  const [plots,        setPlots]        = useState<Plot[]>([]);
-  const [installments, setInstallments] = useState<Installment[]>([]);
-  const [customers,    setCustomers]    = useState<Customer[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [loading,      setLoading]      = useState(true);
+  const { data: plots, loading: l1 } = useLiveCollection<Plot>('plots');
+  const { data: installments, loading: l2 } = useLiveCollection<Installment>('installments');
+  const { data: sales, loading: l3 } = useLiveCollection<Sale>('sales');
+  const { data: customers, loading: l4 } = useLiveCollection<Customer>('customers');
+  const loading = l1 || l2 || l3 || l4;
   
   // Tabs
   const [activeTab, setActiveTab] = useState<'overview' | 'monthly'>('overview');
@@ -34,26 +34,6 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     gsap.fromTo(".list-item-anim", { opacity: 0, y: 15 }, { opacity: 1, y: 0, stagger: 0.05, duration: 0.4, ease: 'power2.out', delay: 0.2 });
   }, [activeTab, installments]);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [p, i, s, c] = await Promise.all([
-          getCollection<Plot>('plots'),
-          getCollection<Installment>('installments'),
-          getCollection<Sale>('sales'),
-          getCollection<Customer>('customers'),
-        ]);
-        setPlots(p);
-        setInstallments(i);
-        setCustomers(c);
-        setSales(s);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
 
   /* ── Stats ── */
   const totalPlots     = plots.length;

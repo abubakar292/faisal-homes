@@ -19,10 +19,10 @@ import SearchableSelect from '../../components/ui/SearchableSelect';
 import { PageLoading } from '../../components/brand';
 
 import {
-  getCollection,
   getDocument,
   addDocument,
 } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import {
   formatDateInput,
   parseDateInput,
@@ -112,15 +112,16 @@ export const NewSale: React.FC = () => {
   const isBookingMode = searchParams.get('mode') === 'booking';
   const queryBookingId = searchParams.get('bookingId') || '';
 
-  // ── Database Data ──
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [dealers, setDealers] = useState<Dealer[]>([]);
-  const [paymentPlans, setPaymentPlans] = useState<PaymentPlan[]>([]);
-  const [activeSales, setActiveSales] = useState<Sale[]>([]);
+  // Database Data (Live via LiveStore)
+  const { data: customers, loading: loadingCustomers } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
+  const { data: rawBookings, loading: loadingBookings } = useLiveCollection<Booking>('bookings');
+  const bookings = useMemo(() => rawBookings.filter(bk => bk.status === 'confirmed'), [rawBookings]);
+  const { data: dealers, loading: loadingDealers } = useLiveCollection<Dealer>('dealers');
+  const { data: paymentPlans, loading: loadingPlans } = useLiveCollection<PaymentPlan>('paymentPlans');
+  const { data: activeSales, loading: loadingSales } = useLiveCollection<Sale>('sales');
   const [company, setCompany] = useState<CompanySettings | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const initialLoading = loadingCustomers || loadingPlots || loadingBookings || loadingDealers || loadingPlans || loadingSales;
 
   // ── Draft State Banner ──
   const [hasDraft, setHasDraft] = useState(false);
@@ -186,35 +187,14 @@ export const NewSale: React.FC = () => {
   // ── Active Navigation State ──
   const [activeSectionId, setActiveSectionId] = useState('section-customer');
 
-  // Load Firestore collections on mount
+  // Load company settings once
   useEffect(() => {
     let active = true;
-    Promise.all([
-      getCollection<Customer>('customers'),
-      getCollection<Plot>('plots'),
-      getCollection<Booking>('bookings'),
-      getCollection<Dealer>('dealers'),
-      getCollection<PaymentPlan>('paymentPlans'),
-      getCollection<Sale>('sales'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ])
-      .then(([c, p, b, d, plans, s, comp]) => {
-        if (!active) return;
-        setCustomers(c);
-        setPlots(p);
-        setBookings(b.filter(bk => bk.status === 'confirmed'));
-        setDealers(d);
-        setPaymentPlans(plans);
-        setActiveSales(s);
-        if (comp) setCompany(comp);
-        setInitialLoading(false);
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
       })
-      .catch(err => {
-        console.error(err);
-        toast.error('Failed to load initial data');
-        setInitialLoading(false);
-      });
-
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -502,7 +482,6 @@ export const NewSale: React.FC = () => {
     };
 
     const docId = await addDocument('paymentPlans', newPlanData);
-    setPaymentPlans(prev => [...prev, { ...newPlanData, id: docId }]);
     setPaymentPlanId(docId);
     setPaymentPlanName(name);
     toast.success(`Plan template "${name}" saved!`);
@@ -1080,7 +1059,7 @@ export const NewSale: React.FC = () => {
     };
 
     const html = generateBookingReceipt(dummyBooking, cust, selectedPlot, company);
-    printContent(html, `Booking-${dummyBooking.receiptNumber}`);
+    printContent(html, 'Booking Form');
   };
 
   const handlePrintAgreement = () => {
@@ -1129,7 +1108,7 @@ export const NewSale: React.FC = () => {
     };
 
     const html = generatePlotAgreement(dummySale, cust, selectedPlot, company);
-    printContent(html, `Agreement-${dummySale.saleNumber}`);
+    printContent(html, 'Plot Sale Agreement');
   };
 
   const handlePrintSchedule = () => {
@@ -1199,7 +1178,7 @@ export const NewSale: React.FC = () => {
     }));
 
     const html = generateInstallmentSchedule(dummySale, cust, selectedPlot, typedInsts, company);
-    printContent(html, `Schedule-${dummySale.saleNumber}`);
+    printContent(html, 'Installment Plan');
   };
 
   // Preview generated installments list for review section

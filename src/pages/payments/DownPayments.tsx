@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DollarSign, Eye, CreditCard, Clock, CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import PageHeader from '../../components/ui/PageHeader';
-import { getCollection, subscribeCollection } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency } from '../../utils/formatters';
 import type { Sale, Customer, Plot } from '../../types';
 import StatCard from '../../components/ui/StatCard';
@@ -31,32 +31,18 @@ interface DownPaymentRow {
 
 export default function DownPayments() {
   const navigate = useNavigate();
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawSales, loading: loadingSales } = useLiveCollection<Sale>('sales');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
+  const loading = loadingSales || loadingCust || loadingPlots;
+
+  const sales = useMemo(() => {
+    return rawSales.filter(s => s.status === 'active' && ((s.downPaymentAmount || 0) > 0 || (s.remainingDownPayment || 0) > 0 || (s.downPaymentReceived || 0) > 0));
+  }, [rawSales]);
   
   const [search, setSearch] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'partial' | 'complete'>('all');
-
-  useEffect(() => {
-    const load = async () => {
-      const [c, p] = await Promise.all([
-        getCollection<Customer>('customers'),
-        getCollection<Plot>('plots'),
-      ]);
-      setCustomers(c);
-      setPlots(p);
-      setLoading(false);
-    };
-    load();
-
-    const unsub = subscribeCollection<Sale>('sales', (data) => {
-      setSales(data.filter(s => s.status === 'active' && ((s.downPaymentAmount || 0) > 0 || (s.remainingDownPayment || 0) > 0 || (s.downPaymentReceived || 0) > 0)));
-    });
-    return () => unsub();
-  }, []);
 
   const rows = useMemo<DownPaymentRow[]>(() => {
     const q = search.toLowerCase().trim();

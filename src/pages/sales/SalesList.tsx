@@ -10,8 +10,7 @@ import {
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import StatusBadge from '../../components/ui/StatusBadge';
-import { getCollection, getDocument } from '../../firebase/firestore';
-import { where } from 'firebase/firestore';
+import { useLiveCollection, useLiveDocument } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { consolidateSaleInstallments } from '../../utils/saleCalc';
 import { printContent, generatePlotAgreement, generateInstallmentSchedule } from '../../utils/printUtils';
@@ -23,12 +22,13 @@ export default function SalesList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const querySaleId = searchParams.get('saleId') || '';
 
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
-  const [dealers, setDealers] = useState<Dealer[]>([]);
-  const [company, setCompany] = useState<CompanySettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: sales, loading: l1 } = useLiveCollection<Sale>('sales');
+  const { data: customers, loading: l2 } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: l3 } = useLiveCollection<Plot>('plots');
+  const { data: dealers, loading: l4 } = useLiveCollection<Dealer>('dealers');
+  const { data: company } = useLiveDocument<CompanySettings>('settings', 'company');
+  const { data: allInstallments } = useLiveCollection<Installment>('installments');
+  const loading = l1 || l2 || l3 || l4;
   const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
 
   // Filters & Search
@@ -53,28 +53,6 @@ export default function SalesList() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedSale]);
-
-  // Load all data
-  useEffect(() => {
-    Promise.all([
-      getCollection<Sale>('sales'),
-      getCollection<Customer>('customers'),
-      getCollection<Plot>('plots'),
-      getCollection<Dealer>('dealers'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([s, c, p, d, comp]) => {
-      setSales(s);
-      setCustomers(c);
-      setPlots(p);
-      setDealers(d);
-      if (comp) setCompany(comp);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      toast.error('Failed to load sales data');
-      setLoading(false);
-    });
-  }, []);
 
   // When sales load, if querySaleId is provided, open drawer
   useEffect(() => {
@@ -149,7 +127,7 @@ export default function SalesList() {
     if (!company) { toast.error('Company settings missing'); return; }
     if (!customer || !plot) { toast.error('Customer or plot details missing'); return; }
     const html = generatePlotAgreement(sale, customer, plot, company);
-    printContent(html, `Agreement-${sale.saleNumber || sale.id}`);
+    printContent(html, 'Plot Sale Agreement');
   };
 
   const handlePrintSchedule = async (sale: Sale) => {
@@ -160,12 +138,10 @@ export default function SalesList() {
 
     try {
       setLoadingActionId(sale.id);
-      const rawInsts = await getCollection<Installment>('installments', [
-        where('saleId', '==', sale.id)
-      ]);
+      const rawInsts = allInstallments.filter(i => i.saleId === sale.id);
       const cleanInsts = consolidateSaleInstallments(rawInsts);
       const html = generateInstallmentSchedule(sale, customer, plot, cleanInsts, company);
-      printContent(html, `Schedule-${sale.saleNumber || sale.id}`);
+      printContent(html, 'Installment Plan');
     } catch (err) {
       console.error(err);
       toast.error('Failed to load installment schedule');

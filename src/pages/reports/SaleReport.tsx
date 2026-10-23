@@ -3,40 +3,32 @@ import { BarChart2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLayout';
 import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
-import { getCollection, getDocument } from '../../firebase/firestore';
+import { getDocument } from '../../firebase/firestore';
+import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Sale, Customer, Plot, CompanySettings } from '../../types';
 
 const SaleReport: React.FC = () => {
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [plots, setPlots] = useState<Plot[]>([]);
+  const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
+  const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
+  const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const loading = loadingSales || loadingCust || loadingPlots;
 
   useEffect(() => {
-    Promise.all([
-      getCollection<Sale>('sales'),
-      getCollection<Customer>('customers'),
-      getCollection<Plot>('plots'),
-      getDocument<CompanySettings>('settings', 'company'),
-    ]).then(([s, c, p, comp]) => {
-      setSales(s);
-      setCustomers(c);
-      setPlots(p);
-      if (comp) setCompany(comp);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      toast.error('Failed to load sales report data');
-      setLoading(false);
-    });
+    let active = true;
+    getDocument<CompanySettings>('settings', 'company')
+      .then(comp => {
+        if (active && comp) setCompany(comp);
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
-  const customerName = (id: string) => customers.find(c => c.id === id)?.name || '—';
+  const customerName = (id: string) => customers.find(c => c.id === id)?.name || '-';
   const plotInfo = (id: string) => {
     const p = plots.find(pl => pl.id === id);
     return p ? { num: p.plotNumber, block: p.block, size: `${p.size} ${p.sizeUnit}` } : null;
@@ -89,7 +81,7 @@ const SaleReport: React.FC = () => {
       rows,
       `Total Sales: ${formatCurrency(totalSales)} | ${filtered.length} transactions`
     );
-    printContent(html, 'Sale-Report');
+    printContent(html, 'Sale Report');
   };
 
   const handleExportCSV = () => {
