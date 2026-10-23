@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Installment Plan</title>
+  <style>
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #111;
+    background: #fff;
+  }
+  .lh-page-origin {
+    position: relative;
+    width: 210mm;
+  }
+  .lh-notch-title {
+    position: absolute;
+    top: 33mm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    font-style: italic;
+    font-size: 19pt;
+    line-height: 13mm;
+    color: #111;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .lh-notch-title.lh-title-sm {
+    font-size: 15pt;
+  }
+  table.lh-doc {
+    width: 210mm;
+    min-height: 297mm;
+    border-collapse: collapse;
+    border-spacing: 0;
+    margin: 0;
+    padding: 0;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+  thead td, tfoot td, tbody td {
+    padding: 0;
+    margin: 0;
+  }
+  tbody td {
+    vertical-align: top;
+  }
+  .lh-header-wrap {
+    width: 210mm;
+    height: 52.4mm;
+    overflow: hidden;
+    line-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .lh-header-img {
+    width: 210mm;
+    height: 52.4mm;
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .lh-content {
+    padding: 5.6mm 14mm 4mm 14mm;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    color: #1a1a1a;
+  }
+  .lh-section-break {
+    page-break-before: always;
+    break-before: page;
+  }
+  .lh-section-title {
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    font-style: italic;
+    font-size: 16pt;
+    color: #1a1a1a;
+    margin: 8mm 0 4mm 0;
+  }
+  .lh-footer-spacer {
+    width: 210mm;
+    height: 60mm;
+  }
+  .lh-footer-fixed {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 210mm;
+    height: 60mm;
+    background: #fff;
+    overflow: hidden;
+    z-index: 999;
+  }
+  .lh-sig-title {
+    position: absolute;
+    left: 13mm;
+    top: 4.5mm;
+    font-size: 13pt;
+    font-weight: bold;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+    line-height: 1;
+  }
+  .lh-applicant-row {
+    position: absolute;
+    left: 13mm;
+    top: 19.5mm;
+    font-size: 13pt;
+    font-weight: bold;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .lh-nominee-row {
+    position: absolute;
+    left: 14mm;
+    top: 31.5mm;
+    font-size: 13pt;
+    font-weight: bold;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .lh-officer-row {
+    position: absolute;
+    left: 13mm;
+    top: 46.5mm;
+    font-size: 13pt;
+    font-weight: bold;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .lh-blank-line {
+    display: inline-block;
+    width: 38mm;
+    border-bottom: 1.5px solid #000;
+    margin-left: 6px;
+    vertical-align: baseline;
+    height: 0;
+  }
+  .lh-logo-wrap {
+    position: absolute;
+    left: 160mm;
+    top: 0mm;
+    width: 38mm;
+    height: 38mm;
+  }
+  .lh-footer-logo {
+    width: 38mm;
+    height: auto;
+    display: block;
+  }
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .lh-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+    margin-bottom: 8px;
+  }
+  .lh-table th, .lh-table td {
+    border: 1px solid #cbd5e1;
+    padding: 4px 6px;
+  }
+  .lh-table th {
+    background: #f1f5f9;
+    font-weight: bold;
+    text-align: left;
+  }
+  .lh-info-title {
+    background: #f0f4f8;
+    border-bottom: 2px solid #1a3c6e;
+    padding: 3px 8px;
+    font-weight: bold;
+    font-size: 9.5pt;
+    color: #1a3c6e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .lh-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 8.5pt;
+    font-weight: bold;
+  }
+  .lh-copy-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #1a3c6e;
+    color: #fff;
+    font-size: 9pt;
+    font-weight: bold;
+    border-radius: 2px;
+    margin-bottom: 6px;
+  }
+  .lh-copy-tag.customer {
+    background: #0d9488;
+  }
+
+  /* Receipt Pair Specific Styling */
+  .lh-receipt-half {
+    position: relative;
+    width: 210mm;
+    height: 148.5mm;
+    overflow: hidden;
+    box-sizing: border-box;
+    padding: 0 10mm;
+    background: #fff;
+  }
+  .lh-receipt-header-img {
+    width: 210mm;
+    height: 22.8mm;
+    display: block;
+    margin-left: -10mm;
+    border: 0;
+  }
+  .lh-receipt-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2.5mm;
+    margin-bottom: 2.5mm;
+  }
+  .lh-receipt-title {
+    flex: 1;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    font-style: italic;
+    font-size: 15pt;
+    color: #111;
+  }
+  .lh-receipt-chip {
+    padding: 2px 8px;
+    background: #1a3c6e;
+    color: #fff;
+    font-size: 8.5pt;
+    font-weight: bold;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .lh-receipt-chip.customer {
+    background: #0d9488;
+  }
+  .lh-receipt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    margin-bottom: 2.5mm;
+  }
+  .lh-receipt-table td {
+    padding: 2.5px 6px;
+    border: 1px solid #cbd5e1;
+    vertical-align: middle;
+  }
+  .lh-receipt-label {
+    color: #475569;
+    font-weight: 600;
+    background: #f8fafc;
+    width: 22%;
+  }
+  .lh-receipt-val {
+    color: #0f172a;
+    width: 28%;
+  }
+  .lh-receipt-footer {
+    position: absolute;
+    bottom: 2.5mm;
+    left: 10mm;
+    right: 10mm;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .lh-receipt-footer-lines {
+    font-size: 8pt;
+    font-weight: bold;
+    color: #1e293b;
+    line-height: 1.8;
+  }
+  .lh-receipt-line {
+    display: inline-block;
+    width: 45mm;
+    border-bottom: 1px solid #000;
+    margin-left: 4px;
+    vertical-align: baseline;
+  }
+  .lh-receipt-logo {
+    width: 22mm;
+    height: auto;
+    display: block;
+  }
+  .lh-cut-line {
+    position: absolute;
+    top: 148.5mm;
+    left: 0;
+    width: 210mm;
+    display: flex;
+    align-items: center;
+    z-index: 50;
+    transform: translateY(-50%);
+  }
+  .lh-cut-scissors {
+    margin-left: 4mm;
+    margin-right: 4px;
+    line-height: 0;
+  }
+  .lh-cut-dashed {
+    flex: 1;
+    border-bottom: 1.5px dashed #94a3b8;
+    height: 0;
+    margin-right: 4mm;
+  }
+
+  /* Report Specific Styling */
+  .lh-report-page {
+    width: 210mm;
+    margin: 0;
+    background: #fff;
+  }
+  .lh-report-page.landscape {
+    width: 297mm;
+  }
+  .lh-report-header-img {
+    width: 210mm;
+    height: 22.8mm;
+    display: block;
+  }
+  .lh-report-page.landscape .lh-report-header-img {
+    width: 297mm;
+  }
+  .lh-report-title {
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    font-style: italic;
+    font-size: 14pt;
+    color: #111;
+    margin: 3mm 0 1.5mm 0;
+  }
+  .lh-report-sub {
+    text-align: center;
+    font-size: 8.5pt;
+    color: #64748b;
+    margin-bottom: 3mm;
+  }
+  .lh-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+  }
+  .lh-report-table th, .lh-report-table td {
+    border: 1px solid #cbd5e1;
+    padding: 3px 5px;
+  }
+  .lh-report-table th {
+    background: #1a3c6e;
+    color: #fff;
+    font-weight: bold;
+    text-align: left;
+    font-size: 8pt;
+    text-transform: uppercase;
+  }
+  .lh-report-table tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .lh-report-totals-row {
+    font-weight: bold;
+    background: #f1f5f9;
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+  .lh-report-footer-spacer {
+    height: 28mm;
+  }
+  .lh-report-footer-wrap {
+    width: 100%;
+    height: 28mm;
+    padding: 2mm 10mm 2mm 10mm;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+  }
+  .lh-report-footer-lines {
+    font-size: 8pt;
+    font-weight: bold;
+    color: #1e293b;
+    line-height: 1.8;
+  }
+  .lh-report-footer-line {
+    display: inline-block;
+    width: 48mm;
+    border-bottom: 1px solid #000;
+    margin-left: 4px;
+    vertical-align: baseline;
+  }
+  .lh-report-logo {
+    width: 20mm;
+    height: auto;
+    display: block;
+  }
+
+  </style>
+</head>
+<body class="lh-doc">
+  <div class="lh-page-origin lh-doc">
+    <div class="lh-notch-title ">Installment Plan</div>
+    
+      <div class="lh-footer-fixed">
+        <div class="lh-sig-title">Signatures</div>
+        <div class="lh-applicant-row">Applicant: <span class="lh-blank-line"></span></div>
+        <div class="lh-nominee-row">Nominee: <span class="lh-blank-line"></span></div>
+        <div class="lh-officer-row">Authorized Officer (SK Real Estate & Builders (Pvt) Ltd): <span class="lh-blank-line"></span></div>
+        <div class="lh-logo-wrap">
+          <img class="lh-footer-logo" src="/brand/letterhead/sk-logo-gray.png" alt="SK Logo" />
+        </div>
+      </div>
+    
+    <table class="lh-doc">
+      <thead>
+        <tr>
+          <td>
+            <div class="lh-header-wrap">
+              <img class="lh-header-img" src="/brand/letterhead/letterhead-header.png" alt="Letterhead Header" />
+            </div>
+          </td>
+        </tr>
+      </thead>
+      
+      <tfoot>
+        <tr>
+          <td>
+            <div class="lh-footer-spacer"></div>
+          </td>
+        </tr>
+      </tfoot>
+    
+      <tbody>
+        <tr>
+          <td>
+            
+    <div class="lh-section lh-section-first">
+      <div class="lh-content">
+        
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div style="border:1px solid #cbd5e1;border-radius:4px;padding:8px;">
+        <div style="font-size:8.5pt;color:#64748b;text-transform:uppercase;font-weight:bold;">Customer</div>
+        <div style="font-weight:bold;font-size:10.5pt;color:#1a3c6e;margin-top:2px;">Muhammad Ali</div>
+        <div style="font-size:9pt;color:#64748b;">C1 | 03001234567</div>
+      </div>
+      <div style="border:1px solid #cbd5e1;border-radius:4px;padding:8px;">
+        <div style="font-size:8.5pt;color:#64748b;text-transform:uppercase;font-weight:bold;">Plot Details</div>
+        <div style="font-weight:bold;font-size:10.5pt;color:#1a3c6e;margin-top:2px;">105, Block A</div>
+        <div style="font-size:9pt;color:#64748b;">5 Marla | Residential</div>
+      </div>
+      <div style="border:1px solid #cbd5e1;border-radius:4px;padding:8px;">
+        <div style="font-size:8.5pt;color:#64748b;text-transform:uppercase;font-weight:bold;">Plan Overview</div>
+        <div style="font-weight:bold;font-size:10.5pt;color:#1a3c6e;margin-top:2px;">1,500,000</div>
+        <div style="font-size:9pt;color:#dc2626;">Remaining: 1,200,000</div>
+      </div>
+    </div>
+
+    <table class="lh-table lh-installment-table">
+      <thead><tr style="background:#f1f5f9;"><th style="width:44px;text-align:center;">#</th><th>Type</th><th>Due Date</th><th style="text-align:right;">Amount</th><th style="text-align:center;">Status</th><th style="text-align:center;">Paid Date</th></tr></thead>
+      <tbody>
+        
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#1</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/01/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#2</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>28/02/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#3</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/03/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#4</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/04/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#5</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/05/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#6</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/06/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">SA 1</td>
+      <td style="font-weight:600;">Semi-Annual</td>
+      <td>30/06/2026</td>
+      <td style="text-align:right;font-weight:bold;">50,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue (Semi-Annual)</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#7</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/07/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#8</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/08/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#9</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/09/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#dc2626;font-weight:bold;">Overdue</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#10</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/10/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#11</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/11/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#12</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/12/2026</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">SA 2</td>
+      <td style="font-weight:600;">Semi-Annual</td>
+      <td>31/12/2026</td>
+      <td style="text-align:right;font-weight:bold;">50,000</td>
+      <td style="text-align:center;"><span style="color:#d97706;font-weight:bold;">Semi-Annual</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#13</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/01/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#14</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>28/02/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#15</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/03/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#16</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/04/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#17</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/05/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#18</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/06/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">SA 3</td>
+      <td style="font-weight:600;">Semi-Annual</td>
+      <td>30/06/2027</td>
+      <td style="text-align:right;font-weight:bold;">50,000</td>
+      <td style="text-align:center;"><span style="color:#d97706;font-weight:bold;">Semi-Annual</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#19</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/07/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#20</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/08/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#21</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/09/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#22</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/10/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#23</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/11/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#24</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/12/2027</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">SA 4</td>
+      <td style="font-weight:600;">Semi-Annual</td>
+      <td>31/12/2027</td>
+      <td style="text-align:right;font-weight:bold;">50,000</td>
+      <td style="text-align:center;"><span style="color:#d97706;font-weight:bold;">Semi-Annual</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#25</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/01/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#26</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>29/02/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#27</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/03/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#28</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/04/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#29</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/05/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#30</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/06/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">SA 5</td>
+      <td style="font-weight:600;">Semi-Annual</td>
+      <td>30/06/2028</td>
+      <td style="text-align:right;font-weight:bold;">50,000</td>
+      <td style="text-align:center;"><span style="color:#d97706;font-weight:bold;">Semi-Annual</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#31</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/07/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#32</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/08/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#33</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/09/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#34</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/10/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#35</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>30/11/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">#36</td>
+      <td style="font-weight:600;">Installment</td>
+      <td>31/12/2028</td>
+      <td style="text-align:right;font-weight:bold;">25,000</td>
+      <td style="text-align:center;"><span style="color:#64748b;">Pending</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+    <tr>
+      <td style="text-align:center;font-weight:bold;">SA 6</td>
+      <td style="font-weight:600;">Semi-Annual</td>
+      <td>31/12/2028</td>
+      <td style="text-align:right;font-weight:bold;">50,000</td>
+      <td style="text-align:center;"><span style="color:#d97706;font-weight:bold;">Semi-Annual</span></td>
+      <td style="text-align:center;">-</td>
+    </tr>
+  
+      </tbody>
+      <tfoot>
+        <tr style="background:#f8fafc;font-weight:bold;">
+          <td colspan="3" style="padding:6px 8px;">TOTAL PAID (0 installments)</td>
+          <td style="text-align:right;color:#16a34a;">0</td>
+          <td colspan="2"></td>
+        </tr>
+        <tr style="background:#f1f5f9;font-weight:bold;">
+          <td colspan="3" style="padding:6px 8px;">REMAINING BALANCE (42 installments)</td>
+          <td style="text-align:right;color:#dc2626;">1,200,000</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  
+      </div>
+    </div>
+  
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  
+  <script>
+  (function() {
+    function fit() {
+      var contentEl = document.querySelector('.lh-content') || document.querySelector('.lh-section');
+      if (!contentEl) return;
+
+      var targetMaxBottom = (297 - 58) * 3.779527559;
+
+      function isOverflowing() {
+        var rect = contentEl.getBoundingClientRect();
+        return rect.bottom > targetMaxBottom;
+      }
+
+      if (!isOverflowing()) return;
+
+      // (1) Check if installment table exists to split into multi-column
+      var instTable = document.querySelector('.lh-installment-table') || document.querySelector('table.lh-table');
+      if (instTable && instTable.querySelectorAll('tbody tr').length > 10) {
+        splitTable(instTable, 2);
+        if (!isOverflowing()) return;
+
+        splitTable(instTable, 3);
+        if (!isOverflowing()) return;
+      }
+
+      // (2) Lower font size stepwise from 10.5pt to 7.5pt
+      var fontSizes = ['10pt', '9.5pt', '9pt', '8.5pt', '8pt', '7.5pt'];
+      for (var i = 0; i < fontSizes.length; i++) {
+        contentEl.style.fontSize = fontSizes[i];
+        var cells = contentEl.querySelectorAll('td, th');
+        for (var c = 0; c < cells.length; c++) {
+          cells[c].style.padding = '2px 3px';
+        }
+        if (!isOverflowing()) return;
+      }
+
+      // (3) CSS zoom down to a minimum of 0.7
+      var zooms = [0.95, 0.9, 0.85, 0.8, 0.75, 0.7];
+      for (var z = 0; z < zooms.length; z++) {
+        contentEl.style.zoom = zooms[z];
+        if (!isOverflowing()) return;
+      }
+
+      // (4) LAST RESORT only: keep 210mm width, increase page height
+      var rect = contentEl.getBoundingClientRect();
+      var neededMm = Math.ceil(52.4 + (rect.height / 3.779527559) + 62);
+      if (neededMm > 297) {
+        var styleEl = document.createElement('style');
+        styleEl.innerHTML = '@page { size: 210mm ' + neededMm + 'mm !important; margin: 0; }' +
+                            'table.lh-doc { min-height: ' + neededMm + 'mm !important; }' +
+                            '.lh-footer-fixed { position: fixed; bottom: 0; }';
+        document.head.appendChild(styleEl);
+      }
+    }
+
+    function splitTable(table, numCols) {
+      var parent = table.parentElement;
+      if (!parent) return;
+
+      var origRows = table.__origRows;
+      if (!origRows) {
+        origRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+        table.__origRows = origRows;
+      }
+
+      var container = document.querySelector('.lh-multicol-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.className = 'lh-multicol-container';
+        container.style.display = 'flex';
+        container.style.gap = '8px';
+        container.style.width = '100%';
+        parent.insertBefore(container, table);
+        table.style.display = 'none';
+      } else {
+        container.innerHTML = '';
+      }
+
+      var rowsPerCol = Math.ceil(origRows.length / numCols);
+      for (var col = 0; col < numCols; col++) {
+        var subTable = document.createElement('table');
+        subTable.className = 'lh-table lh-subtable';
+        subTable.style.flex = '1';
+        subTable.style.fontSize = '8pt';
+        subTable.style.marginBottom = '0';
+        subTable.innerHTML = '<thead><tr style="background:#f1f5f9;"><th style="width:24px;text-align:center;padding:2px 3px;">#</th><th style="padding:2px 3px;">Due Date</th><th style="text-align:right;padding:2px 3px;">Amount</th><th style="text-align:center;padding:2px 3px;">Status</th></tr></thead><tbody></tbody>';
+        var tbody = subTable.querySelector('tbody');
+
+        var start = col * rowsPerCol;
+        var end = Math.min(start + rowsPerCol, origRows.length);
+        for (var r = start; r < end; r++) {
+          var clone = origRows[r].cloneNode(true);
+          var tds = clone.querySelectorAll('td');
+          if (tds.length >= 4) {
+            tds[0].style.padding = '2px 3px';
+            tds[1].style.padding = '2px 3px';
+            tds[2].style.padding = '2px 3px';
+            tds[3].style.padding = '2px 3px';
+            if (tds.length > 4) {
+              tds[4].parentNode.removeChild(tds[4]);
+            }
+          }
+          tbody.appendChild(clone);
+        }
+        container.appendChild(subTable);
+      }
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      fit();
+    } else {
+      window.addEventListener('DOMContentLoaded', fit);
+    }
+  })();
+  </script>
+
+</body>
+</html>
