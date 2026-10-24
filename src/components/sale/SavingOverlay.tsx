@@ -199,13 +199,13 @@ export const SavingOverlay: React.FC<SavingOverlayProps> = ({
                     <Calendar size={15} /> Print Schedule
                   </button>
                 )}
-                {onPrintBookingReceipt && successResult?.bookingId && (
+                {onPrintBookingReceipt && (
                   <button
                     type="button"
                     onClick={onPrintBookingReceipt}
                     className="btn btn-secondary py-2.5 flex items-center justify-center gap-1.5"
                   >
-                    <Printer size={15} /> Print Receipt
+                    <Printer size={15} /> Print Booking Receipt
                   </button>
                 )}
                 {onOpenCustomerLedger && (

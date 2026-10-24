@@ -159,6 +159,13 @@ export async function saveBookingOnly(input: SaveBookingOnlyInput): Promise<Subm
     throw new Error(`Plot is not available (current status: ${plotData.status})`);
   }
 
+  if (!input.bookingAmount || input.bookingAmount <= 0) {
+    throw new Error('Booking amount is required and must be greater than 0');
+  }
+  if (!input.totalPrice || input.totalPrice <= 0) {
+    throw new Error('Total price is required and must be greater than 0');
+  }
+
   const batch = writeBatch(db);
 
   // 1. Resolve Customer ID and document
@@ -313,16 +320,32 @@ export async function saveSale(input: SaveSaleInput): Promise<SubmitServiceResul
     }
   }
 
-  // 3. Resolve Booking
+  // 3. Resolve Booking (Always required for every sale)
+  const dpAmt = input.downPaymentAmount || 0;
   let finalBookingId = input.existingBookingId || '';
   let bookingPaid = 0;
 
   if (input.existingBookingId) {
+    if (!existingBookingData) {
+      throw new Error('Linked booking could not be found');
+    }
+    bookingPaid = existingBookingData.bookingAmount || 0;
+    if (bookingPaid <= 0) {
+      throw new Error('Booking amount must be greater than 0');
+    }
+    if (bookingPaid > dpAmt) {
+      throw new Error('Booking amount cannot exceed down payment amount');
+    }
     const existingBkRef = doc(db, 'bookings', input.existingBookingId);
     firstBatch.update(existingBkRef, { status: 'converted' });
-    bookingPaid = existingBookingData?.bookingAmount || 0;
-  } else if (input.booking?.bookingAmount && input.booking.bookingAmount > 0) {
-    // New booking entered inline with the sale -> create immediately converted booking
+  } else {
+    if (!input.booking || !input.booking.bookingAmount || input.booking.bookingAmount <= 0) {
+      throw new Error('Booking amount is required and must be greater than 0');
+    }
+    if (input.booking.bookingAmount > dpAmt) {
+      throw new Error('Booking amount cannot exceed down payment amount');
+    }
+
     const newBkRef = doc(collection(db, 'bookings'));
     finalBookingId = newBkRef.id;
     bookingPaid = input.booking.bookingAmount;
@@ -479,8 +502,10 @@ export async function saveSale(input: SaveSaleInput): Promise<SubmitServiceResul
     onPossessionEnabled: input.onPossessionEnabled,
     onPossessionAmount: input.onPossessionAmount,
     onPossessionDate: parseDateInput(input.onPossessionDate),
-    onPossessionNotes: input.onPossessionNotes,
-    includeRemainingDownPayment: false,
+    includeRemainingDownPayment:
+      input.includeRemainingDownPayment !== undefined
+        ? input.includeRemainingDownPayment
+        : planMath.remainingDownPayment > 0,
   };
 
   const expCounts = expectedCounts(planInput);

@@ -89,7 +89,6 @@ import SectionNav, { SectionNavItem, SectionStatus } from '../../components/sale
 import SectionCard from '../../components/sale/SectionCard';
 import CustomerSection from '../../components/sale/CustomerSection';
 import PlotPriceSection from '../../components/sale/PlotPriceSection';
-import BookingSection from '../../components/sale/BookingSection';
 import PaymentPlanSection from '../../components/sale/PaymentPlanSection';
 import DealerSection from '../../components/sale/DealerSection';
 import ReviewSection, { ValidationItem } from '../../components/sale/ReviewSection';
@@ -154,8 +153,8 @@ export const NewSale: React.FC = () => {
   const [semiAnnualEnabled, setSemiAnnualEnabled] = useState(false);
   const [semiAnnualAmount, setSemiAnnualAmount] = useState<string | number>('');
 
-  // ── Form State: Booking ──
-  const [bookingEnabled, setBookingEnabled] = useState<boolean>(isBookingMode);
+  // ── Form State: Booking (Always required) ──
+  const bookingEnabled = true;
   const [bookingAmount, setBookingAmount] = useState<string | number>('');
   const [bookingDate, setBookingDate] = useState(() => formatDateInput(new Date()));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
@@ -249,7 +248,6 @@ export const NewSale: React.FC = () => {
     }
     setSelectedPlotId(bk.plotId);
     setIsBookingLocked(true);
-    setBookingEnabled(true);
     setBookingAmount(bk.bookingAmount);
     setBookingDate(formatDateInput(bk.bookingDate));
     setPaymentMethod(bk.paymentMethod || 'Cash');
@@ -317,7 +315,7 @@ export const NewSale: React.FC = () => {
   };
 
   // Booking amount
-  const numBookingAmount = bookingEnabled ? Number(bookingAmount) || 0 : 0;
+  const numBookingAmount = Number(bookingAmount) || 0;
   const numDownPaymentAmount = Number(downPaymentAmount) || 0;
   const remainingDownPayment = calculateRemainingDownPayment(numDownPaymentAmount, numBookingAmount);
 
@@ -611,7 +609,6 @@ export const NewSale: React.FC = () => {
       if (d.onPossessionNotes) setOnPossessionNotes(d.onPossessionNotes);
       if (d.semiAnnualEnabled !== undefined) setSemiAnnualEnabled(d.semiAnnualEnabled);
       if (d.semiAnnualAmount) setSemiAnnualAmount(d.semiAnnualAmount);
-      if (d.bookingEnabled !== undefined) setBookingEnabled(d.bookingEnabled);
       if (d.bookingAmount) setBookingAmount(d.bookingAmount);
       if (d.bookingDate) setBookingDate(d.bookingDate);
       if (d.paymentMethod) setPaymentMethod(d.paymentMethod);
@@ -659,7 +656,6 @@ export const NewSale: React.FC = () => {
     setOnPossessionNotes('');
     setSemiAnnualEnabled(false);
     setSemiAnnualAmount('');
-    setBookingEnabled(isBookingMode);
     setBookingAmount('');
     setPaymentMethod('Cash');
     setBankName('');
@@ -694,15 +690,25 @@ export const NewSale: React.FC = () => {
   }, [newCustomer]);
 
   const plotPriceValid = useMemo(() => {
-    return !!selectedPlotId && numTotalPrice > 0 && numDownPaymentAmount >= numBookingAmount;
-  }, [selectedPlotId, numTotalPrice, numDownPaymentAmount, numBookingAmount]);
-
-  const bookingValid = useMemo(() => {
-    if (!bookingEnabled) return true;
-    if (Number(bookingAmount) <= 0) return false;
-    if (paymentMethod === 'Cheque' && !chequeNumber.trim()) return false;
-    return true;
-  }, [bookingEnabled, bookingAmount, paymentMethod, chequeNumber]);
+    const numDp = Number(downPaymentAmount) || 0;
+    const numBk = Number(bookingAmount) || 0;
+    const bookingOk =
+      numBk > 0 &&
+      numBk <= numDp &&
+      numDp <= finalPrice &&
+      (paymentMethod !== 'Cheque' || !!chequeNumber.trim()) &&
+      (paymentMethod !== 'Bank Transfer' || !!bankName.trim());
+    return !!selectedPlotId && numTotalPrice > 0 && bookingOk;
+  }, [
+    selectedPlotId,
+    numTotalPrice,
+    downPaymentAmount,
+    bookingAmount,
+    finalPrice,
+    paymentMethod,
+    chequeNumber,
+    bankName,
+  ]);
 
   const planValid = useMemo(() => {
     if (isBookingMode) return true;
@@ -744,7 +750,7 @@ export const NewSale: React.FC = () => {
     return Object.keys(errs).length === 0;
   }, [isBookingMode, dealerMode, selectedDealerId, newDealer]);
 
-  const sectionNavItems: SectionNavItem[] = [
+  const sectionNavItems: SectionNavItem[] = useMemo(() => [
     {
       id: 'section-customer',
       number: 1,
@@ -757,23 +763,17 @@ export const NewSale: React.FC = () => {
       label: 'Plot & Pricing',
       status: plotPriceValid ? 'complete' : hasAttemptedSubmit ? 'attention' : 'pending',
     },
-    {
-      id: 'section-booking',
-      number: 3,
-      label: 'Booking',
-      status: bookingValid ? 'complete' : hasAttemptedSubmit ? 'attention' : 'pending',
-    },
     ...(!isBookingMode
       ? [
           {
             id: 'section-plan',
-            number: 4,
+            number: 3,
             label: 'Payment Plan',
             status: planValid ? ('complete' as SectionStatus) : hasAttemptedSubmit ? ('attention' as SectionStatus) : ('pending' as SectionStatus),
           },
           {
             id: 'section-dealer',
-            number: 5,
+            number: 4,
             label: 'Dealer',
             status: dealerValid ? ('complete' as SectionStatus) : hasAttemptedSubmit ? ('attention' as SectionStatus) : ('pending' as SectionStatus),
           },
@@ -781,11 +781,11 @@ export const NewSale: React.FC = () => {
       : []),
     {
       id: 'section-review',
-      number: isBookingMode ? 4 : 6,
+      number: isBookingMode ? 3 : 5,
       label: 'Review & Finish',
       status: 'pending',
     },
-  ];
+  ], [customerValid, plotPriceValid, planValid, dealerValid, hasAttemptedSubmit, isBookingMode]);
 
   const validationChecklist: ValidationItem[] = [
     {
@@ -796,26 +796,32 @@ export const NewSale: React.FC = () => {
     },
     {
       sectionId: 'section-plot-price',
-      label: 'Plot & Total Price',
+      label: 'Plot & Pricing Breakdown',
       valid: !!selectedPlotId && numTotalPrice > 0,
       message: !selectedPlotId ? 'Please select a plot' : numTotalPrice <= 0 ? 'Enter total price' : undefined,
     },
     {
       sectionId: 'section-plot-price',
-      label: 'Down Payment Rules',
-      valid: numDownPaymentAmount >= numBookingAmount && numDownPaymentAmount <= finalPrice,
-      message: numDownPaymentAmount < numBookingAmount ? 'Down payment cannot be less than booking' : undefined,
+      label: 'Down Payment & Booking Rules',
+      valid:
+        numBookingAmount > 0 &&
+        numBookingAmount <= numDownPaymentAmount &&
+        numDownPaymentAmount <= finalPrice &&
+        (paymentMethod !== 'Cheque' || !!chequeNumber.trim()) &&
+        (paymentMethod !== 'Bank Transfer' || !!bankName.trim()),
+      message:
+        numDownPaymentAmount <= 0
+          ? 'Enter down payment amount'
+          : numBookingAmount <= 0
+          ? 'Enter booking amount (> 0)'
+          : numBookingAmount > numDownPaymentAmount
+          ? 'Booking amount cannot exceed down payment'
+          : paymentMethod === 'Cheque' && !chequeNumber.trim()
+          ? 'Enter cheque number'
+          : paymentMethod === 'Bank Transfer' && !bankName.trim()
+          ? 'Enter bank name'
+          : undefined,
     },
-    ...(bookingEnabled
-      ? [
-          {
-            sectionId: 'section-booking',
-            label: 'Booking Details',
-            valid: bookingValid,
-            message: 'Provide valid booking amount and payment details',
-          },
-        ]
-      : []),
     ...(!isBookingMode
       ? [
           {
@@ -905,7 +911,12 @@ export const NewSale: React.FC = () => {
     if (!selectedPlotId) errs.plotId = 'Plot is required';
     if (numTotalPrice <= 0) errs.totalPrice = 'Total price is required';
     if (!bookingAmount || Number(bookingAmount) <= 0) {
-      errs.bookingAmount = 'Booking amount is required';
+      errs.bookingAmount = 'Booking amount is required and must be greater than 0';
+    } else if (Number(downPaymentAmount) > 0 && Number(bookingAmount) > Number(downPaymentAmount)) {
+      errs.bookingAmount = 'Booking amount cannot exceed down payment';
+    }
+    if (paymentMethod === 'Bank Transfer' && !bankName.trim()) {
+      errs.bankName = 'Bank name required';
     }
     if (paymentMethod === 'Cheque' && !chequeNumber.trim()) {
       errs.chequeNumber = 'Cheque number required';
@@ -964,15 +975,20 @@ export const NewSale: React.FC = () => {
 
     if (!selectedPlotId) errs.plotId = 'Plot is required';
     if (numTotalPrice <= 0) errs.totalPrice = 'Total price is required';
-    if (numDownPaymentAmount < numBookingAmount) {
-      errs.downPaymentAmount = 'Down payment cannot be less than booking paid';
+    if (numDownPaymentAmount <= 0) {
+      errs.downPaymentAmount = 'Down payment amount is required';
     }
-
-    if (bookingEnabled) {
-      if (Number(bookingAmount) <= 0) errs.bookingAmount = 'Booking amount is required';
-      if (paymentMethod === 'Cheque' && !chequeNumber.trim()) {
-        errs.chequeNumber = 'Cheque number required';
-      }
+    if (!bookingAmount || Number(bookingAmount) <= 0) {
+      errs.bookingAmount = 'Booking amount is required and must be greater than 0';
+    } else if (Number(bookingAmount) > numDownPaymentAmount) {
+      errs.bookingAmount = 'Booking amount cannot exceed down payment';
+      errs.downPaymentAmount = 'Down payment cannot be less than booking';
+    }
+    if (paymentMethod === 'Bank Transfer' && !bankName.trim()) {
+      errs.bankName = 'Bank name required';
+    }
+    if (paymentMethod === 'Cheque' && !chequeNumber.trim()) {
+      errs.chequeNumber = 'Cheque number required';
     }
 
     const planInputData: PlanInput = {
@@ -1020,7 +1036,7 @@ export const NewSale: React.FC = () => {
       const firstSection =
         errs.name || errs.cnic || errs.phone
           ? 'section-customer'
-          : errs.plotId || errs.totalPrice
+          : errs.plotId || errs.totalPrice || errs.downPaymentAmount || errs.bookingAmount || errs.bankName || errs.chequeNumber
           ? 'section-plot-price'
           : errs.rows
           ? 'section-plan'
@@ -1042,17 +1058,15 @@ export const NewSale: React.FC = () => {
         customer: { newCustomer, nominee, documents },
         plotId: selectedPlotId,
         existingBookingId: activeBookingId || undefined,
-        booking: bookingEnabled
-          ? {
-              bookingAmount: Number(bookingAmount),
-              bookingDate,
-              paymentMethod,
-              bankName,
-              chequeNumber,
-              referenceNumber,
-              notes: bookingNotes,
-            }
-          : undefined,
+        booking: {
+          bookingAmount: Number(bookingAmount),
+          bookingDate,
+          paymentMethod,
+          bankName,
+          chequeNumber,
+          referenceNumber,
+          notes: bookingNotes,
+        },
         saleDate: new Date(),
         totalPrice: numTotalPrice,
         perMarlaRate: Number(perMarlaRate) || 0,
@@ -1389,6 +1403,22 @@ export const NewSale: React.FC = () => {
               onDownPaymentAmountChange={handleDpAmountChange}
               remainingDownPayment={remainingDownPayment}
               bookingPaid={numBookingAmount}
+              bookingAmount={bookingAmount}
+              onBookingAmountChange={setBookingAmount}
+              bookingDate={bookingDate}
+              onBookingDateChange={setBookingDate}
+              paymentMethod={paymentMethod}
+              onPaymentMethodChange={setPaymentMethod}
+              bankName={bankName}
+              onBankNameChange={setBankName}
+              chequeNumber={chequeNumber}
+              onChequeNumberChange={setChequeNumber}
+              referenceNumber={referenceNumber}
+              onReferenceNumberChange={setReferenceNumber}
+              bookingNotes={bookingNotes}
+              onBookingNotesChange={setBookingNotes}
+              bookingReceiptNumber={bookingReceiptNumber}
+              isBookingLocked={isBookingLocked}
               onPossessionEnabled={onPossessionEnabled}
               setOnPossessionEnabled={setOnPossessionEnabled}
               onPossessionAmount={onPossessionAmount}
@@ -1406,41 +1436,11 @@ export const NewSale: React.FC = () => {
             />
           </SectionCard>
 
-          {/* Section 3: Booking */}
-          <SectionCard
-            id="section-booking"
-            number={3}
-            title="Advance Booking Details"
-            status={bookingValid ? 'complete' : hasAttemptedSubmit ? 'attention' : 'pending'}
-          >
-            <BookingSection
-              bookingEnabled={bookingEnabled}
-              setBookingEnabled={setBookingEnabled}
-              bookingAmount={bookingAmount}
-              onBookingAmountChange={setBookingAmount}
-              bookingDate={bookingDate}
-              onBookingDateChange={setBookingDate}
-              paymentMethod={paymentMethod}
-              onPaymentMethodChange={setPaymentMethod}
-              bankName={bankName}
-              onBankNameChange={setBankName}
-              chequeNumber={chequeNumber}
-              onChequeNumberChange={setChequeNumber}
-              referenceNumber={referenceNumber}
-              onReferenceNumberChange={setReferenceNumber}
-              notes={bookingNotes}
-              onNotesChange={setBookingNotes}
-              receiptNumber={bookingReceiptNumber}
-              isBookingLocked={isBookingLocked}
-              errors={fieldErrors}
-            />
-          </SectionCard>
-
-          {/* Section 4: Payment Plan (Hidden in booking-only mode) */}
+          {/* Section 3: Payment Plan (Hidden in booking-only mode) */}
           {!isBookingMode && (
             <SectionCard
               id="section-plan"
-              number={4}
+              number={3}
               title="Payment Plan Schedule"
               status={planValid ? 'complete' : hasAttemptedSubmit ? 'attention' : 'pending'}
             >
@@ -1470,11 +1470,11 @@ export const NewSale: React.FC = () => {
             </SectionCard>
           )}
 
-          {/* Section 5: Dealer (Hidden in booking-only mode) */}
+          {/* Section 4: Dealer (Hidden in booking-only mode) */}
           {!isBookingMode && (
             <SectionCard
               id="section-dealer"
-              number={5}
+              number={4}
               title="Dealer Assignment"
               status={dealerValid ? 'complete' : hasAttemptedSubmit ? 'attention' : 'pending'}
             >
@@ -1497,10 +1497,10 @@ export const NewSale: React.FC = () => {
             </SectionCard>
           )}
 
-          {/* Section 6: Review & Finish */}
+          {/* Section 5: Review & Finish */}
           <SectionCard
             id="section-review"
-            number={isBookingMode ? 4 : 6}
+            number={isBookingMode ? 3 : 5}
             title="Review & Finish"
             status="pending"
           >

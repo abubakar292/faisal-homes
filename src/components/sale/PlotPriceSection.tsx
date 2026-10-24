@@ -2,7 +2,7 @@ import React from 'react';
 import SearchableSelect from '../ui/SearchableSelect';
 import FormField from '../ui/FormField';
 import { formatCurrency } from '../../utils/formatters';
-import type { Plot } from '../../types';
+import type { Plot, PaymentMethod } from '../../types';
 
 interface PlotPriceSectionProps {
   plots: Plot[];
@@ -21,6 +21,24 @@ interface PlotPriceSectionProps {
   onDownPaymentAmountChange: (amt: number | string) => void;
   remainingDownPayment: number;
   bookingPaid: number;
+  // Booking fields
+  bookingAmount: number | string;
+  onBookingAmountChange: (amt: number | string) => void;
+  bookingDate: string;
+  onBookingDateChange: (date: string) => void;
+  paymentMethod: PaymentMethod;
+  onPaymentMethodChange: (method: PaymentMethod) => void;
+  bankName: string;
+  onBankNameChange: (val: string) => void;
+  chequeNumber: string;
+  onChequeNumberChange: (val: string) => void;
+  referenceNumber: string;
+  onReferenceNumberChange: (val: string) => void;
+  bookingNotes: string;
+  onBookingNotesChange: (val: string) => void;
+  bookingReceiptNumber: string;
+  isBookingLocked?: boolean;
+  // Options
   onPossessionEnabled: boolean;
   setOnPossessionEnabled: (val: boolean) => void;
   onPossessionAmount: number | string;
@@ -53,7 +71,23 @@ export const PlotPriceSection: React.FC<PlotPriceSectionProps> = ({
   downPaymentAmount,
   onDownPaymentAmountChange,
   remainingDownPayment,
-  bookingPaid,
+  bookingPaid: _bookingPaid,
+  bookingAmount,
+  onBookingAmountChange,
+  bookingDate,
+  onBookingDateChange,
+  paymentMethod,
+  onPaymentMethodChange,
+  bankName,
+  onBankNameChange,
+  chequeNumber,
+  onChequeNumberChange,
+  referenceNumber,
+  onReferenceNumberChange,
+  bookingNotes,
+  onBookingNotesChange,
+  bookingReceiptNumber,
+  isBookingLocked = false,
   onPossessionEnabled,
   setOnPossessionEnabled,
   onPossessionAmount,
@@ -200,9 +234,9 @@ export const PlotPriceSection: React.FC<PlotPriceSectionProps> = ({
         )}
       </div>
 
-      {/* Down Payment Section */}
+      {/* Down Payment & Advance Booking Section */}
       <div className="space-y-4 pt-2 border-t border-slate-100">
-        <h3 className="form-section-header">Down Payment</h3>
+        <h3 className="form-section-header">Down Payment & Advance Booking</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             label="Down Payment %"
@@ -230,7 +264,7 @@ export const PlotPriceSection: React.FC<PlotPriceSectionProps> = ({
             label="Down Payment Amount (Rs.)"
             required
             error={errors.downPaymentAmount}
-            hint="Amount in Rupees"
+            hint="Total down payment agreed"
           >
             <input
               type="number"
@@ -243,24 +277,161 @@ export const PlotPriceSection: React.FC<PlotPriceSectionProps> = ({
           </FormField>
         </div>
 
-        {Number(downPaymentAmount) > 0 && (
-          <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs space-y-1 text-sky-900">
-            <div className="flex justify-between">
-              <span>Total Down Payment:</span>
-              <span className="font-semibold">{formatCurrency(Number(downPaymentAmount))}</span>
+        {/* Advance Booking Payment (Always required) */}
+        <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/90 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Advance Booking Payment
+              </h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Required advance booking payment credited towards down payment.
+              </p>
             </div>
-            {bookingPaid > 0 && (
-              <div className="flex justify-between text-slate-600">
-                <span>Booking Amount (credited):</span>
-                <span>− {formatCurrency(bookingPaid)}</span>
-              </div>
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+              <span className="text-emerald-800 font-medium text-[11px]">
+                {isBookingLocked ? 'Linked Receipt:' : 'Receipt Number:'}
+              </span>
+              <span className="font-mono font-bold text-emerald-900 bg-emerald-100/80 px-2 py-0.5 rounded text-[11px]">
+                {bookingReceiptNumber || 'BK-AUTO'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="Booking Amount (Rs.)"
+              required
+              error={errors.bookingAmount}
+              hint="Required (> 0, not more than down payment)"
+            >
+              <input
+                type="number"
+                className={`input-field font-semibold ${errors.bookingAmount ? 'input-error' : ''}`}
+                value={bookingAmount}
+                disabled={isBookingLocked}
+                onChange={e => onBookingAmountChange(e.target.value)}
+                placeholder="e.g., 100000"
+                min="0"
+              />
+            </FormField>
+
+            <FormField label="Booking Date" required error={errors.bookingDate}>
+              <input
+                type="date"
+                className={`input-field ${errors.bookingDate ? 'input-error' : ''}`}
+                value={bookingDate}
+                disabled={isBookingLocked}
+                onChange={e => onBookingDateChange(e.target.value)}
+              />
+            </FormField>
+
+            <FormField label="Payment Method">
+              <select
+                className="input-field"
+                value={paymentMethod}
+                disabled={isBookingLocked}
+                onChange={e => onPaymentMethodChange(e.target.value as PaymentMethod)}
+              >
+                <option value="Cash">Cash</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Cheque">Cheque</option>
+              </select>
+            </FormField>
+
+            {paymentMethod === 'Bank Transfer' && (
+              <>
+                <FormField label="Bank Name" required error={errors.bankName}>
+                  <input
+                    type="text"
+                    className={`input-field ${errors.bankName ? 'input-error' : ''}`}
+                    value={bankName}
+                    disabled={isBookingLocked}
+                    onChange={e => onBankNameChange(e.target.value)}
+                    placeholder="e.g., Meezan Bank, HBL"
+                  />
+                </FormField>
+                <FormField label="Reference Number (Optional)">
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={referenceNumber}
+                    disabled={isBookingLocked}
+                    onChange={e => onReferenceNumberChange(e.target.value)}
+                    placeholder="Transaction ID / Slip #"
+                  />
+                </FormField>
+              </>
             )}
-            <div className="flex justify-between font-bold text-sm pt-1 border-t border-sky-200/60">
+
+            {paymentMethod === 'Cheque' && (
+              <>
+                <FormField label="Bank Name">
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={bankName}
+                    disabled={isBookingLocked}
+                    onChange={e => onBankNameChange(e.target.value)}
+                    placeholder="Issuing bank name"
+                  />
+                </FormField>
+                <FormField label="Cheque Number" required error={errors.chequeNumber}>
+                  <input
+                    type="text"
+                    className={`input-field font-mono ${errors.chequeNumber ? 'input-error' : ''}`}
+                    value={chequeNumber}
+                    disabled={isBookingLocked}
+                    onChange={e => onChequeNumberChange(e.target.value)}
+                    placeholder="Cheque #"
+                  />
+                </FormField>
+                <FormField label="Reference Number (Optional)">
+                  <input
+                    type="text"
+                    className="input-field"
+                    value={referenceNumber}
+                    disabled={isBookingLocked}
+                    onChange={e => onReferenceNumberChange(e.target.value)}
+                    placeholder="Cheque deposit ref #"
+                  />
+                </FormField>
+              </>
+            )}
+
+            <div className="sm:col-span-2">
+              <FormField label="Booking Notes">
+                <input
+                  type="text"
+                  className="input-field"
+                  value={bookingNotes}
+                  disabled={isBookingLocked}
+                  onChange={e => onBookingNotesChange(e.target.value)}
+                  placeholder="Notes regarding advance booking payment..."
+                />
+              </FormField>
+            </div>
+          </div>
+
+          {/* Helper line and calculation */}
+          <div className="p-3.5 rounded-xl bg-sky-50 border border-sky-200 text-xs space-y-1.5 text-sky-900">
+            <div className="text-[11px] font-bold text-sky-800 tracking-wide uppercase">
+              Remaining down payment = down payment - booking
+            </div>
+            <div className="flex justify-between items-center text-slate-700 pt-1 border-t border-sky-200/60">
+              <span>Down Payment Amount:</span>
+              <span className="font-semibold">{formatCurrency(Number(downPaymentAmount) || 0)}</span>
+            </div>
+            <div className="flex justify-between items-center text-emerald-700">
+              <span>Booking Amount (Credited):</span>
+              <span>− {formatCurrency(Number(bookingAmount) || 0)}</span>
+            </div>
+            <div className="flex justify-between items-center font-bold text-sm text-[#1a3c6e] pt-1 border-t border-sky-200/60">
               <span>Remaining Down Payment:</span>
               <span>{formatCurrency(remainingDownPayment)}</span>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* On-Possession Option */}

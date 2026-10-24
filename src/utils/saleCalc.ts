@@ -50,6 +50,39 @@ export function calculateRemainingDownPayment(
   return (downPaymentAmount || 0) - (bookingPaid || 0);
 }
 
+export interface BookingPricingValidation {
+  valid: boolean;
+  errors: {
+    bookingAmount?: string;
+    downPaymentAmount?: string;
+  };
+}
+
+export function validateBookingPricing(
+  bookingAmount: number,
+  downPaymentAmount: number,
+  finalPrice?: number
+): BookingPricingValidation {
+  const errors: { bookingAmount?: string; downPaymentAmount?: string } = {};
+
+  if (typeof bookingAmount !== 'number' || isNaN(bookingAmount) || bookingAmount <= 0) {
+    errors.bookingAmount = 'Booking amount is required and must be greater than 0';
+  } else if (bookingAmount > downPaymentAmount) {
+    errors.bookingAmount = 'Booking amount cannot exceed the down payment amount';
+  }
+
+  if (typeof downPaymentAmount !== 'number' || isNaN(downPaymentAmount) || downPaymentAmount <= 0) {
+    errors.downPaymentAmount = 'Down payment amount is required and must be greater than 0';
+  } else if (finalPrice !== undefined && finalPrice > 0 && downPaymentAmount > finalPrice) {
+    errors.downPaymentAmount = 'Down payment cannot exceed final price';
+  }
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
 export function calculateSemiAnnualCount(totalMonths: number): number {
   return Math.floor(Math.max(0, totalMonths || 0) / 6);
 }
