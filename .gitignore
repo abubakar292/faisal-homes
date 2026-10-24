@@ -28,3 +28,4 @@ dist-ssr
 
 .vercel
 artifacts/
+artifacts_reports_pdf/

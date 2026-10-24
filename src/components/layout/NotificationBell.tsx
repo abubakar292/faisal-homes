@@ -3,7 +3,12 @@ import { Bell, AlertCircle, Clock, DollarSign, ChevronRight } from 'lucide-react
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLiveCollection } from '../../data/liveStore';
-import { formatCurrency, isInstallmentOverdue, getOutstanding } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
+import {
+  isInstallmentOverdue,
+  isInstallmentDueSoon,
+  getInstallmentOutstanding,
+} from '../../domain/metrics';
 import type { Installment, Sale, Customer, Plot } from '../../types';
 
 interface Notification {
@@ -44,21 +49,14 @@ const NotificationBell: React.FC = () => {
   }, [isOpen]);
 
   const notifications = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const in7Days = new Date(today);
-    in7Days.setDate(in7Days.getDate() + 7);
-
     const notifs: Notification[] = [];
     const customerMap = new Map(customers.map(c => [c.id, c]));
+    const activeSaleIds = new Set(sales.filter(s => s.status !== 'cancelled').map(s => s.id));
 
-    // 1. Overdue installments (strictly exclude down payments)
+    // 1. Overdue installments (strictly active sales and non-down-payment)
     const overdueInsts = installments.filter(i => {
-      if (i.type === 'down_payment') return false;
-      if (!isInstallmentOverdue(i)) return false;
-      const sale = sales.find(s => s.id === i.saleId);
-      if (sale?.status === 'cancelled') return false;
-      return true;
+      if (!activeSaleIds.has(i.saleId)) return false;
+      return isInstallmentOverdue(i);
     });
 
     // Group overdue by customer for cleaner notifications
@@ -68,7 +66,7 @@ const NotificationBell: React.FC = () => {
       const key = inst.customerId;
       const existing = overdueByCustomer.get(key) || { count: 0, total: 0, name: c?.name || 'Unknown' };
       existing.count++;
-      existing.total += getOutstanding(inst);
+      existing.total += getInstallmentOutstanding(inst);
       overdueByCustomer.set(key, existing);
     });
 
@@ -87,16 +85,12 @@ const NotificationBell: React.FC = () => {
 
     // 2. Due in 7 days
     const dueSoon = installments.filter(i => {
-      if (i.status === 'paid' || i.type === 'down_payment') return false;
-      const sale = sales.find(s => s.id === i.saleId);
-      if (sale?.status === 'cancelled') return false;
-      const due = new Date(i.dueDate);
-      due.setHours(0, 0, 0, 0);
-      return due >= today && due <= in7Days;
+      if (!activeSaleIds.has(i.saleId)) return false;
+      return isInstallmentDueSoon(i);
     });
 
     if (dueSoon.length > 0) {
-      const totalDueSoon = dueSoon.reduce((s, i) => s + getOutstanding(i), 0);
+      const totalDueSoon = dueSoon.reduce((s, i) => s + getInstallmentOutstanding(i), 0);
       notifs.push({
         id: 'due-soon-all',
         type: 'due_soon',

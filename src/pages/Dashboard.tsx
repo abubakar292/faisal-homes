@@ -13,9 +13,16 @@ import StatCard from '../components/ui/StatCard';
 import StatusBadge from '../components/ui/StatusBadge';
 import { StatCardSkeleton } from '../components/ui/Skeleton';
 import { useLiveCollection } from '../data/liveStore';
-import {  formatCurrency, formatDate, getDaysOverdue, getWhatsAppUrl , isInstallmentOverdue, getOutstanding } from '../utils/formatters';
-import type { Plot, Installment, Sale, Customer } from '../types';
-import { isAfter, addDays, isBefore, addMonths, subMonths, format } from 'date-fns';
+import { formatCurrency, formatDate, getWhatsAppUrl } from '../utils/formatters';
+import type { Plot, Installment, Sale, Customer, DownPaymentTransaction } from '../types';
+import {
+  computeEnterpriseMetrics,
+  isInstallmentOverdue,
+  isInstallmentDueSoon,
+  getInstallmentOutstanding,
+  getDaysOverdueKarachi,
+} from '../domain/metrics';
+import { addMonths, subMonths, format } from 'date-fns';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const PIE_COLORS = ['#22c55e', '#e8a020', '#3b82f6', '#ef4444'];
@@ -25,7 +32,8 @@ const Dashboard: React.FC = () => {
   const { data: installments, loading: l2 } = useLiveCollection<Installment>('installments');
   const { data: sales, loading: l3 } = useLiveCollection<Sale>('sales');
   const { data: customers, loading: l4 } = useLiveCollection<Customer>('customers');
-  const loading = l1 || l2 || l3 || l4;
+  const { data: dpTransactions, loading: l5 } = useLiveCollection<DownPaymentTransaction>('downPaymentTransactions');
+  const loading = l1 || l2 || l3 || l4 || l5;
   
   // Tabs
   const [activeTab, setActiveTab] = useState<'overview' | 'monthly'>('overview');
@@ -35,38 +43,43 @@ const Dashboard: React.FC = () => {
     gsap.fromTo(".list-item-anim", { opacity: 0, y: 15 }, { opacity: 1, y: 0, stagger: 0.05, duration: 0.4, ease: 'power2.out', delay: 0.2 });
   }, [activeTab, installments]);
 
-  /* ── Stats ── */
-  const totalPlots     = plots.length;
-  const soldPlots      = plots.filter(p => p.status === 'sold').length;
-  const availablePlots = plots.filter(p => p.status === 'available').length;
-  const bookedPlots    = plots.filter(p => p.status === 'booked').length;
-
+  /* ── Stats via Domain Metrics (Single Source of Truth) ── */
   const activeSalesDocs = sales.filter(s => s.status !== 'cancelled');
-  const activeSaleIds = activeSalesDocs.map(s => s.id);
+  const activeSaleIds = new Set(activeSalesDocs.map(s => s.id));
 
-  // Total collection includes: paid regular installments + booking amount paid + down payment received
-  const paidInstCollection = installments
-    .filter(i => i.status === 'paid' && i.type !== 'down_payment')
-    .reduce((s, i) => s + (i.amountPaid || 0), 0);
-  const bookingCollection = activeSalesDocs.reduce((s, sale) => s + (sale.bookingAmountPaid || 0), 0);
-  const dpCollection = activeSalesDocs.reduce((s, sale) => s + (sale.downPaymentReceived || 0), 0);
-  const totalCollection = paidInstCollection + bookingCollection + dpCollection;
+  const enterpriseMetrics = React.useMemo(() => {
+    return computeEnterpriseMetrics(plots, sales, installments, dpTransactions);
+  }, [plots, sales, installments, dpTransactions]);
 
-  // Pending installments amount (strictly exclude down payments)
-  const pendingAmount = installments
-    .filter(i => (i.status === 'pending' || i.status === 'overdue') && i.type !== 'down_payment' && activeSaleIds.includes(i.saleId))
-    .reduce((s, i) => s + getOutstanding(i), 0);
+  const totalPlots     = enterpriseMetrics.plots.total;
+  const soldPlots      = enterpriseMetrics.plots.sold;
+  const availablePlots = enterpriseMetrics.plots.available;
+  const bookedPlots    = enterpriseMetrics.plots.booked;
 
-  const overdueInsts = installments.filter(i => activeSaleIds.includes(i.saleId) && i.type !== 'down_payment' && isInstallmentOverdue(i));
-  const overdueAmount = overdueInsts.reduce((s, i) => s + getOutstanding(i), 0);
+  const totalCollection = React.useMemo(() => {
+    // Lifetime collections: booking + dp + regular installments + possession
+    const activeSales = sales.filter(s => s.status !== 'cancelled');
+    const bAmt = activeSales.reduce((sum, s) => sum + (Number(s.bookingAmountPaid) || 0), 0);
+    const dpAmt = dpTransactions.filter(t => activeSaleIds.has(t.saleId)).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const instAmt = installments
+      .filter(i => activeSaleIds.has(i.saleId) && i.type !== 'down_payment' && i.status === 'paid')
+      .reduce((sum, i) => sum + (Number(i.amountPaid) || 0), 0);
+    const possAmt = activeSales
+      .filter(s => s.onPossessionStatus === 'Paid')
+      .reduce((sum, s) => sum + (Number(s.onPossessionAmount) || 0), 0);
+    return bAmt + dpAmt + instAmt + possAmt;
+  }, [sales, dpTransactions, installments, activeSaleIds]);
 
-  const now   = new Date();
-  const next7 = addDays(now, 7);
-  const upcoming = installments.filter(i =>
-    i.type !== 'down_payment' &&
-    i.status === 'pending' && i.dueDate &&
-    isAfter(new Date(i.dueDate), now) && isBefore(new Date(i.dueDate), next7)
-  );
+  const pendingAmount = enterpriseMetrics.pending.amount;
+  const overdueAmount = enterpriseMetrics.overdue.amount;
+
+  const overdueInsts = React.useMemo(() => {
+    return installments.filter(i => activeSaleIds.has(i.saleId) && isInstallmentOverdue(i));
+  }, [installments, activeSaleIds]);
+
+  const upcoming = React.useMemo(() => {
+    return installments.filter(i => activeSaleIds.has(i.saleId) && isInstallmentDueSoon(i));
+  }, [installments, activeSaleIds]);
 
   /* ── Monthly bar chart ── */
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
@@ -252,7 +265,7 @@ const Dashboard: React.FC = () => {
             <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
               {overdueInsts.slice(0, 8).map(inst => {
                 const customer = customers.find(c => c.id === inst.customerId);
-                const days = getDaysOverdue(new Date(inst.dueDate));
+                const days = getDaysOverdueKarachi(inst.dueDate);
                 const waMsg = `Assalam-o-Alaikum ${customer?.name || ''},\n\nAapki plot ${plotInfo(inst.plotId)} ki qist baqi hai:\nAmount: ${formatCurrency(inst.amountDue)}\nDue Date: ${formatDate(inst.dueDate)}\nDays Overdue: ${days} days\n\nMeherbani farma ke jald payment karein.\n\nFaisal Homes`;
                 return (
                   <div key={inst.id} className="list-item-anim flex items-center justify-between p-3 rounded-xl"

@@ -7,7 +7,26 @@ import { getDocument } from '../../firebase/firestore';
 import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
-import type { Installment, Booking, Sale, Customer, Plot, CompanySettings } from '../../types';
+import type { Installment, Booking, Sale, Customer, Plot, CompanySettings, DownPaymentTransaction } from '../../types';
+import {
+  computeTotalCollected,
+  computeCollectedToday,
+  isDateInRangeKarachi,
+  isDateTodayKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+} from '../../domain/metrics';
+
+interface DailyPaymentItem {
+  id: string;
+  receiptNumber: string;
+  customerId: string;
+  plotId: string;
+  label: string;
+  amount: number;
+  paymentMethod: string;
+  date: Date;
+}
 
 const DailyReport: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
@@ -17,8 +36,9 @@ const DailyReport: React.FC = () => {
   const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
   const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
   const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
+  const { data: dpTransactions, loading: loadingDp } = useLiveCollection<DownPaymentTransaction>('downPaymentTransactions');
   const [company, setCompany] = useState<CompanySettings | null>(null);
-  const loading = loadingInst || loadingBookings || loadingSales || loadingCust || loadingPlots;
+  const loading = loadingInst || loadingBookings || loadingSales || loadingCust || loadingPlots || loadingDp;
 
   useEffect(() => {
     let active = true;
@@ -30,37 +50,133 @@ const DailyReport: React.FC = () => {
     return () => { active = false; };
   }, []);
 
-  const dayPayments = useMemo(() => {
-    return installments.filter(i => {
-      if (i.status !== 'paid' || !i.paymentDate) return false;
-      const d = new Date(i.paymentDate);
-      if (dateRange.start && d < dateRange.start) return false;
-      if (dateRange.end && d > dateRange.end) return false;
-      return true;
-    });
-  }, [installments, dateRange]);
+  const activeSales = useMemo(() => sales.filter(s => s.status !== 'cancelled'), [sales]);
+  const activeSaleIds = useMemo(() => new Set(activeSales.map(s => s.id)), [activeSales]);
 
-  const dayBookings = useMemo(() => {
-    return bookings.filter(b => {
-      const d = new Date(b.bookingDate);
-      if (dateRange.start && d < dateRange.start) return false;
-      if (dateRange.end && d > dateRange.end) return false;
-      return true;
-    });
-  }, [bookings, dateRange]);
+  // Combined collection entries for the day/range
+  const allCollectionItems = useMemo<DailyPaymentItem[]>(() => {
+    const items: DailyPaymentItem[] = [];
 
-  const daySales = useMemo(() => {
-    return sales.filter(s => {
-      const d = new Date(s.saleDate || s.createdAt);
-      if (dateRange.start && d < dateRange.start) return false;
-      if (dateRange.end && d > dateRange.end) return false;
-      return true;
+    // 1. Regular Installments
+    installments.forEach(inst => {
+      if (!activeSaleIds.has(inst.saleId)) return;
+      if (inst.type === 'down_payment') return;
+      if (inst.status !== 'paid' || !inst.paymentDate) return;
+      const d = new Date(inst.paymentDate);
+      if (dateRange.start && dateRange.end) {
+        if (!isDateInRangeKarachi(d, dateRange.start, dateRange.end)) return;
+      } else if (dateRange.start) {
+        if (d.getTime() < startOfDayKarachi(dateRange.start).getTime()) return;
+      } else if (dateRange.end) {
+        if (d.getTime() > endOfDayKarachi(dateRange.end).getTime()) return;
+      } else {
+        // Default to Today in Karachi
+        if (!isDateTodayKarachi(d)) return;
+      }
+
+      items.push({
+        id: `inst-${inst.id}`,
+        receiptNumber: inst.receiptNumber || '—',
+        customerId: inst.customerId,
+        plotId: inst.plotId,
+        label: inst.type === 'semi_annual' ? `Semi-Annual #${inst.installmentNumber}` : `#${inst.installmentNumber}`,
+        amount: Number(inst.amountPaid) || 0,
+        paymentMethod: inst.paymentMethod || 'Cash',
+        date: d,
+      });
     });
-  }, [sales, dateRange]);
+
+    // 2. Down Payment Transactions
+    dpTransactions.forEach(tx => {
+      if (!activeSaleIds.has(tx.saleId)) return;
+      const d = new Date(tx.paymentDate);
+      if (dateRange.start && dateRange.end) {
+        if (!isDateInRangeKarachi(d, dateRange.start, dateRange.end)) return;
+      } else if (dateRange.start) {
+        if (d.getTime() < startOfDayKarachi(dateRange.start).getTime()) return;
+      } else if (dateRange.end) {
+        if (d.getTime() > endOfDayKarachi(dateRange.end).getTime()) return;
+      } else {
+        if (!isDateTodayKarachi(d)) return;
+      }
+
+      items.push({
+        id: `dp-${tx.id}`,
+        receiptNumber: tx.receiptNumber || '—',
+        customerId: tx.customerId,
+        plotId: tx.plotId,
+        label: 'Down Payment',
+        amount: Number(tx.amount) || 0,
+        paymentMethod: tx.paymentMethod || 'Bank Transfer',
+        date: d,
+      });
+    });
+
+    // 3. Booking collections
+    activeSales.forEach(s => {
+      const bAmt = Number(s.bookingAmountPaid) || 0;
+      if (bAmt <= 0) return;
+      const sDate = s.saleDate ? new Date(s.saleDate) : s.createdAt ? new Date(s.createdAt) : null;
+      if (!sDate) return;
+
+      if (dateRange.start && dateRange.end) {
+        if (!isDateInRangeKarachi(sDate, dateRange.start, dateRange.end)) return;
+      } else if (dateRange.start) {
+        if (sDate.getTime() < startOfDayKarachi(dateRange.start).getTime()) return;
+      } else if (dateRange.end) {
+        if (sDate.getTime() > endOfDayKarachi(dateRange.end).getTime()) return;
+      } else {
+        if (!isDateTodayKarachi(sDate)) return;
+      }
+
+      items.push({
+        id: `booking-${s.id}`,
+        receiptNumber: s.saleNumber || '—',
+        customerId: s.customerId,
+        plotId: s.plotId,
+        label: 'Booking Advance',
+        amount: bAmt,
+        paymentMethod: 'Cash',
+        date: sDate,
+      });
+    });
+
+    // 4. Possession payments
+    activeSales.forEach(s => {
+      if (s.onPossessionStatus !== 'Paid') return;
+      const pAmt = Number(s.onPossessionAmount) || 0;
+      if (pAmt <= 0) return;
+      const pDate = s.onPossessionPaidDate ? new Date(s.onPossessionPaidDate) : s.saleDate ? new Date(s.saleDate) : null;
+      if (!pDate) return;
+
+      if (dateRange.start && dateRange.end) {
+        if (!isDateInRangeKarachi(pDate, dateRange.start, dateRange.end)) return;
+      } else if (dateRange.start) {
+        if (pDate.getTime() < startOfDayKarachi(dateRange.start).getTime()) return;
+      } else if (dateRange.end) {
+        if (pDate.getTime() > endOfDayKarachi(dateRange.end).getTime()) return;
+      } else {
+        if (!isDateTodayKarachi(pDate)) return;
+      }
+
+      items.push({
+        id: `poss-${s.id}`,
+        receiptNumber: `POSS-${s.saleNumber}`,
+        customerId: s.customerId,
+        plotId: s.plotId,
+        label: 'Possession Payment',
+        amount: pAmt,
+        paymentMethod: 'Bank Transfer',
+        date: pDate,
+      });
+    });
+
+    return items.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [installments, dpTransactions, activeSales, activeSaleIds, dateRange]);
 
   const totalCollection = useMemo(() => {
-    return dayPayments.reduce((s, i) => s + (i.amountPaid || 0), 0);
-  }, [dayPayments]);
+    return allCollectionItems.reduce((s, i) => s + i.amount, 0);
+  }, [allCollectionItems]);
 
   const customerName = (id: string) => customers.find(c => c.id === id)?.name || '—';
   const plotInfo = (id: string) => {
@@ -70,30 +186,58 @@ const DailyReport: React.FC = () => {
 
   // Search filtered payments
   const filteredPayments = useMemo(() => {
-    if (!search.trim()) return dayPayments;
+    if (!search.trim()) return allCollectionItems;
     const q = search.toLowerCase().trim();
-    return dayPayments.filter(i => {
+    return allCollectionItems.filter(i => {
       const cName = customerName(i.customerId).toLowerCase();
       const pInfo = plotInfo(i.plotId).toLowerCase();
       const rec = (i.receiptNumber || '').toLowerCase();
-      return cName.includes(q) || pInfo.includes(q) || rec.includes(q);
+      return cName.includes(q) || pInfo.includes(q) || rec.includes(q) || i.label.toLowerCase().includes(q);
     });
-  }, [dayPayments, search, customers, plots]);
+  }, [allCollectionItems, search, customers, plots]);
+
+  const dayBookings = useMemo(() => {
+    return bookings.filter(b => {
+      const d = new Date(b.bookingDate);
+      if (dateRange.start && dateRange.end) {
+        return isDateInRangeKarachi(d, dateRange.start, dateRange.end);
+      } else if (dateRange.start) {
+        return d.getTime() >= startOfDayKarachi(dateRange.start).getTime();
+      } else if (dateRange.end) {
+        return d.getTime() <= endOfDayKarachi(dateRange.end).getTime();
+      }
+      return isDateTodayKarachi(d);
+    });
+  }, [bookings, dateRange]);
+
+  const daySales = useMemo(() => {
+    return activeSales.filter(s => {
+      const d = new Date(s.saleDate || s.createdAt);
+      if (dateRange.start && dateRange.end) {
+        return isDateInRangeKarachi(d, dateRange.start, dateRange.end);
+      } else if (dateRange.start) {
+        return d.getTime() >= startOfDayKarachi(dateRange.start).getTime();
+      } else if (dateRange.end) {
+        return d.getTime() <= endOfDayKarachi(dateRange.end).getTime();
+      }
+      return isDateTodayKarachi(d);
+    });
+  }, [activeSales, dateRange]);
 
   const handlePrint = () => {
     if (!company) { toast.error('Configure company settings first'); return; }
-    const rows = dayPayments.map(i => [
+    const rows = filteredPayments.map(i => [
       i.receiptNumber || '—',
       customerName(i.customerId),
       plotInfo(i.plotId),
-      `#${i.installmentNumber}`,
-      formatCurrency(i.amountPaid),
+      i.label,
+      formatCurrency(i.amount),
       i.paymentMethod || '—'
     ]);
     const html = generateReportHTML(
       company,
-      `Daily Collection Report - ${dateRange.start ? formatDate(dateRange.start) : 'All Dates'}`,
-      ['Receipt #', 'Customer', 'Plot', 'Inst #', 'Amount', 'Method'],
+      `Daily Collection Report - ${dateRange.start ? formatDate(dateRange.start) : 'Today'}`,
+      ['Receipt #', 'Customer', 'Plot', 'Description', 'Amount', 'Method'],
       rows,
       `Total Collection: ${formatCurrency(totalCollection)}`
     );
@@ -101,21 +245,21 @@ const DailyReport: React.FC = () => {
   };
 
   const handleExportCsv = () => {
-    const headers = ['Receipt #', 'Customer', 'Plot', 'Inst #', 'Amount', 'Method', 'Date'];
-    const rows = dayPayments.map(i => [
+    const headers = ['Receipt #', 'Customer', 'Plot', 'Description', 'Amount', 'Method', 'Date'];
+    const rows = filteredPayments.map(i => [
       i.receiptNumber || '—',
       customerName(i.customerId),
       plotInfo(i.plotId),
-      `#${i.installmentNumber}`,
-      i.amountPaid || 0,
+      i.label,
+      i.amount || 0,
       i.paymentMethod || '—',
-      formatDate(i.paymentDate as Date)
+      formatDate(i.date)
     ]);
     exportRowsToCsv('Daily-Report', headers, rows);
   };
 
   const kpis = [
-    { label: 'Payments Received', value: dayPayments.length, color: 'green' as const, hint: 'Installments collected' },
+    { label: 'Payments Received', value: allCollectionItems.length, color: 'green' as const, hint: 'Total collections' },
     { label: 'Total Collection', value: totalCollection, isCurrency: true, color: 'green' as const, hint: 'Cash & Bank inflows' },
     { label: 'New Bookings', value: dayBookings.length, color: 'blue' as const, hint: 'Bookings recorded' },
     { label: 'New Sales', value: daySales.length, color: 'navy' as const, hint: 'Plot allocations' },
@@ -153,7 +297,7 @@ const DailyReport: React.FC = () => {
             <th className="py-3 px-3">Receipt #</th>
             <th className="py-3 px-3">Customer</th>
             <th className="py-3 px-3">Plot</th>
-            <th className="py-3 px-3">Inst #</th>
+            <th className="py-3 px-3">Description</th>
             <th className="py-3 px-3">Amount</th>
             <th className="py-3 px-3">Method</th>
           </tr>
@@ -171,8 +315,8 @@ const DailyReport: React.FC = () => {
                 <td className="py-2.5 px-3 font-mono font-medium text-primary">{i.receiptNumber || '—'}</td>
                 <td className="py-2.5 px-3 font-semibold text-slate-800">{customerName(i.customerId)}</td>
                 <td className="py-2.5 px-3 text-slate-700">{plotInfo(i.plotId)}</td>
-                <td className="py-2.5 px-3 text-slate-600">#{i.installmentNumber}</td>
-                <td className="py-2.5 px-3 font-bold text-emerald-700">{formatCurrency(i.amountPaid)}</td>
+                <td className="py-2.5 px-3 text-slate-600">{i.label}</td>
+                <td className="py-2.5 px-3 font-bold text-emerald-700">{formatCurrency(i.amount)}</td>
                 <td className="py-2.5 px-3 text-slate-600">{i.paymentMethod || '—'}</td>
               </tr>
             ))

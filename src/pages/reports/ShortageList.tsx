@@ -6,9 +6,17 @@ import ReportLayout, { exportRowsToCsv } from '../../components/reports/ReportLa
 import ReportFilters, { DateRange } from '../../components/ui/ReportFilters';
 import { getDocument } from '../../firebase/firestore';
 import { useLiveCollection } from '../../data/liveStore';
-import { formatCurrency, formatDate, isInstallmentOverdue, daysOverdue, getOutstanding } from '../../utils/formatters';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Installment, Customer, Plot, Sale, CompanySettings } from '../../types';
+import {
+  isInstallmentOverdue,
+  getInstallmentOutstanding,
+  getDaysOverdueKarachi,
+  isDateInRangeKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+} from '../../domain/metrics';
 
 type AgeFilter = 'all' | '1-30' | '31-60' | '61-90' | '90+';
 
@@ -53,21 +61,18 @@ const ShortageList: React.FC = () => {
 
   const allRows = useMemo<ShortageRow[]>(() => {
     const rows: ShortageRow[] = [];
+    const activeSaleIds = new Set(sales.filter(s => s.status !== 'cancelled').map(s => s.id));
 
     installments.forEach(inst => {
-      // Down payments are managed separately, never as regular shortage installments
-      if (inst.type === 'down_payment') return;
+      if (!activeSaleIds.has(inst.saleId)) return;
       if (!isInstallmentOverdue(inst)) return;
-
-      const sale = sales.find(s => s.id === inst.saleId);
-      if (sale?.status === 'cancelled') return;
 
       const customer = customers.find(c => c.id === inst.customerId);
       const plot = plots.find(p => p.id === inst.plotId);
       if (!customer || !plot) return;
 
       const due = new Date(inst.dueDate!);
-      const dDiff = daysOverdue(inst);
+      const dDiff = getDaysOverdueKarachi(inst.dueDate);
 
       let instNum: string | number = inst.installmentNumber;
       if (inst.type === 'semi_annual')   instNum = 'Semi-Annual';
@@ -85,7 +90,7 @@ const ShortageList: React.FC = () => {
         block: plot.block,
         installmentNumber: instNum,
         dueDate: due,
-        amountDue: getOutstanding(inst),
+        amountDue: getInstallmentOutstanding(inst),
         daysDiff: dDiff,
       });
     });
@@ -104,8 +109,13 @@ const ShortageList: React.FC = () => {
 
       if (filterBlock && row.block !== filterBlock) return false;
 
-      if (dateRange.start && row.dueDate < dateRange.start) return false;
-      if (dateRange.end && row.dueDate > dateRange.end) return false;
+      if (dateRange.start && dateRange.end) {
+        if (!isDateInRangeKarachi(row.dueDate, dateRange.start, dateRange.end)) return false;
+      } else if (dateRange.start) {
+        if (row.dueDate.getTime() < startOfDayKarachi(dateRange.start).getTime()) return false;
+      } else if (dateRange.end) {
+        if (row.dueDate.getTime() > endOfDayKarachi(dateRange.end).getTime()) return false;
+      }
 
       if (q) {
         const match = (

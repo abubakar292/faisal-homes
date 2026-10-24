@@ -12,6 +12,11 @@ import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type {
   Dealer, DealerCommission, DealerLedgerEntry, Sale, Customer, Plot, CompanySettings,
 } from '../../types';
+import {
+  isDateInRangeKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+} from '../../domain/metrics';
 
 const DealerCommissionReport: React.FC = () => {
   const navigate = useNavigate();
@@ -55,8 +60,14 @@ const DealerCommissionReport: React.FC = () => {
       const d = resolveDealer(c);
       if (!d || d.id !== filterDealer) return false;
     }
-    if (dateRange.start && new Date(c.createdAt) < dateRange.start) return false;
-    if (dateRange.end && new Date(c.createdAt) > dateRange.end) return false;
+    const d = new Date(c.createdAt);
+    if (dateRange.start && dateRange.end) {
+      if (!isDateInRangeKarachi(d, dateRange.start, dateRange.end)) return false;
+    } else if (dateRange.start) {
+      if (d.getTime() < startOfDayKarachi(dateRange.start).getTime()) return false;
+    } else if (dateRange.end) {
+      if (d.getTime() > endOfDayKarachi(dateRange.end).getTime()) return false;
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       const dName = dealerName(c).toLowerCase();

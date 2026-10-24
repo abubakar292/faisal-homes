@@ -9,6 +9,11 @@ import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Booking, Customer, Plot, CompanySettings } from '../../types';
+import {
+  isDateInRangeKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+} from '../../domain/metrics';
 
 const BookingReport: React.FC = () => {
   const { data: bookings, loading: loadingBookings } = useLiveCollection<Booking>('bookings');
@@ -39,8 +44,13 @@ const BookingReport: React.FC = () => {
   const filtered = useMemo(() => {
     return bookings.filter(b => {
       const d = new Date(b.bookingDate || b.createdAt);
-      if (dateRange.start && d < dateRange.start) return false;
-      if (dateRange.end && d > dateRange.end) return false;
+      if (dateRange.start && dateRange.end) {
+        if (!isDateInRangeKarachi(d, dateRange.start, dateRange.end)) return false;
+      } else if (dateRange.start) {
+        if (d.getTime() < startOfDayKarachi(dateRange.start).getTime()) return false;
+      } else if (dateRange.end) {
+        if (d.getTime() > endOfDayKarachi(dateRange.end).getTime()) return false;
+      }
       if (filterStatus && b.status !== filterStatus) return false;
 
       if (search.trim()) {

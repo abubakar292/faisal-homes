@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { History, Printer, Search, X } from 'lucide-react';
+import { History, Printer, Search, X, DollarSign, CalendarCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import DataTable, { Column } from '../../components/ui/DataTable';
@@ -8,20 +8,28 @@ import { getDocument } from '../../firebase/firestore';
 import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generatePaymentReceipt } from '../../utils/printUtils';
-import type { Installment, Customer, Plot, Sale, CompanySettings } from '../../types';
+import type { Installment, Customer, Plot, Sale, CompanySettings, DownPaymentTransaction } from '../../types';
+import {
+  computeCollectedToday,
+  computeTotalCollected,
+  isDateInRangeKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+} from '../../domain/metrics';
 
 const PaymentHistory: React.FC = () => {
   const { data: rawInstallments, loading: loadingInst } = useLiveCollection<Installment>('installments');
   const { data: customers, loading: loadingCust } = useLiveCollection<Customer>('customers');
   const { data: plots, loading: loadingPlots } = useLiveCollection<Plot>('plots');
   const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
+  const { data: dpTransactions, loading: loadingDp } = useLiveCollection<DownPaymentTransaction>('downPaymentTransactions');
   const [company, setCompany] = useState<CompanySettings | null>(null);
 
   const installments = useMemo(() => {
     return [...rawInstallments].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [rawInstallments]);
 
-  const loading = loadingInst || loadingCust || loadingPlots || loadingSales;
+  const loading = loadingInst || loadingCust || loadingPlots || loadingSales || loadingDp;
   const [filterMethod, setFilterMethod] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -42,13 +50,26 @@ const PaymentHistory: React.FC = () => {
     return () => { active = false; };
   }, []);
 
+  const collectedTodayAmount = useMemo(() => {
+    return computeCollectedToday(sales, rawInstallments, dpTransactions).total;
+  }, [sales, rawInstallments, dpTransactions]);
+
+  const totalCollectedAmount = useMemo(() => {
+    return computeTotalCollected(sales, rawInstallments, dpTransactions).total;
+  }, [sales, rawInstallments, dpTransactions]);
+
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return installments.filter(i => {
       if (filterMethod && i.paymentMethod !== filterMethod) return false;
       if (filterStatus && i.status !== filterStatus) return false;
-      if (dateFrom && i.paymentDate && new Date(i.paymentDate) < new Date(dateFrom)) return false;
-      if (dateTo && i.paymentDate && new Date(i.paymentDate) > new Date(dateTo)) return false;
+      if (dateFrom && dateTo && i.paymentDate) {
+        if (!isDateInRangeKarachi(i.paymentDate, dateFrom, dateTo)) return false;
+      } else if (dateFrom && i.paymentDate) {
+        if (new Date(i.paymentDate).getTime() < startOfDayKarachi(dateFrom).getTime()) return false;
+      } else if (dateTo && i.paymentDate) {
+        if (new Date(i.paymentDate).getTime() > endOfDayKarachi(dateTo).getTime()) return false;
+      }
       if (q) {
         const customer = customers.find(c => c.id === i.customerId);
         const plot = plots.find(p => p.id === i.plotId);
@@ -112,6 +133,44 @@ const PaymentHistory: React.FC = () => {
   return (
     <div>
       <PageHeader title="Payment History" subtitle={`${installments.length} total installments`} icon={<History size={20} />} />
+
+      {/* KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5 no-print">
+        <div className="card border border-emerald-200 bg-emerald-50/40 p-4 rounded-xl flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">Collected Today</p>
+            <p className="text-xl font-extrabold text-emerald-900 mt-0.5">{formatCurrency(collectedTodayAmount)}</p>
+            <p className="text-[11px] text-emerald-700 mt-0.5">Asia/Karachi business day</p>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
+            <CalendarCheck size={20} />
+          </div>
+        </div>
+
+        <div className="card border border-blue-200 bg-blue-50/40 p-4 rounded-xl flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Total Lifetime Collections</p>
+            <p className="text-xl font-extrabold text-blue-900 mt-0.5">{formatCurrency(totalCollectedAmount)}</p>
+            <p className="text-[11px] text-blue-700 mt-0.5">All verified inflows</p>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700">
+            <DollarSign size={20} />
+          </div>
+        </div>
+
+        <div className="card border border-slate-200 bg-white p-4 rounded-xl flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Paid Receipts</p>
+            <p className="text-xl font-extrabold text-slate-800 mt-0.5">
+              {installments.filter(i => i.status === 'paid').length}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">{filtered.length} filtered items</p>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+            <History size={20} />
+          </div>
+        </div>
+      </div>
 
       {/* Success banner */}
       {showPrint && printInst && (

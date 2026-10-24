@@ -7,13 +7,29 @@ import { getDocument } from '../../firebase/firestore';
 import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
-import type { Installment, CompanySettings } from '../../types';
+import type { Installment, CompanySettings, Sale, DownPaymentTransaction } from '../../types';
+import {
+  computeTotalCollected,
+  computeCollectedToday,
+  isDateInRangeKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+} from '../../domain/metrics';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { format } from 'date-fns';
 
+interface CollectedItem {
+  method: string;
+  amount: number;
+  date: Date;
+}
+
 const CollectionReport: React.FC = () => {
-  const { data: allInstallments, loading } = useLiveCollection<Installment>('installments');
-  const installments = useMemo(() => allInstallments.filter(inst => inst.status === 'paid'), [allInstallments]);
+  const { data: allInstallments, loading: l1 } = useLiveCollection<Installment>('installments');
+  const { data: sales, loading: l2 } = useLiveCollection<Sale>('sales');
+  const { data: dpTransactions, loading: l3 } = useLiveCollection<DownPaymentTransaction>('downPaymentTransactions');
+  const loading = l1 || l2 || l3;
+
   const [company, setCompany] = useState<CompanySettings | null>(null);
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   const [search, setSearch] = useState('');
@@ -28,20 +44,100 @@ const CollectionReport: React.FC = () => {
     return () => { active = false; };
   }, []);
 
+  const activeSales = useMemo(() => sales.filter(s => s.status !== 'cancelled'), [sales]);
+  const activeSaleIds = useMemo(() => new Set(activeSales.map(s => s.id)), [activeSales]);
+
+  // Aggregate all collection transactions
+  const allCollectedItems = useMemo<CollectedItem[]>(() => {
+    const list: CollectedItem[] = [];
+
+    // 1. Regular installments
+    allInstallments.forEach(inst => {
+      if (!activeSaleIds.has(inst.saleId)) return;
+      if (inst.type === 'down_payment') return;
+      if (inst.status !== 'paid' || !inst.paymentDate) return;
+      const amt = Number(inst.amountPaid) || 0;
+      if (amt <= 0) return;
+      list.push({
+        method: inst.paymentMethod || 'Cash',
+        amount: amt,
+        date: new Date(inst.paymentDate),
+      });
+    });
+
+    // 2. Down payments
+    dpTransactions.forEach(tx => {
+      if (!activeSaleIds.has(tx.saleId)) return;
+      const amt = Number(tx.amount) || 0;
+      if (amt <= 0) return;
+      list.push({
+        method: tx.paymentMethod || 'Bank Transfer',
+        amount: amt,
+        date: new Date(tx.paymentDate),
+      });
+    });
+
+    // 3. Booking collections
+    activeSales.forEach(s => {
+      const bAmt = Number(s.bookingAmountPaid) || 0;
+      if (bAmt <= 0) return;
+      const sDate = s.saleDate ? new Date(s.saleDate) : s.createdAt ? new Date(s.createdAt) : null;
+      if (sDate) {
+        list.push({
+          method: 'Cash',
+          amount: bAmt,
+          date: sDate,
+        });
+      }
+    });
+
+    // 4. Possession payments
+    activeSales.forEach(s => {
+      if (s.onPossessionStatus !== 'Paid') return;
+      const pAmt = Number(s.onPossessionAmount) || 0;
+      if (pAmt <= 0) return;
+      const pDate = s.onPossessionPaidDate ? new Date(s.onPossessionPaidDate) : s.saleDate ? new Date(s.saleDate) : null;
+      if (pDate) {
+        list.push({
+          method: 'Bank Transfer',
+          amount: pAmt,
+          date: pDate,
+        });
+      }
+    });
+
+    return list;
+  }, [allInstallments, dpTransactions, activeSales, activeSaleIds]);
+
   const filtered = useMemo(() => {
-    return installments.filter(i => {
-      if (!i.paymentDate) return false;
-      const d = new Date(i.paymentDate);
-      if (dateRange.start && d < dateRange.start) return false;
-      if (dateRange.end && d > dateRange.end) return false;
+    return allCollectedItems.filter(item => {
+      if (dateRange.start && dateRange.end) {
+        return isDateInRangeKarachi(item.date, dateRange.start, dateRange.end);
+      } else if (dateRange.start) {
+        return item.date.getTime() >= startOfDayKarachi(dateRange.start).getTime();
+      } else if (dateRange.end) {
+        return item.date.getTime() <= endOfDayKarachi(dateRange.end).getTime();
+      }
       return true;
     });
-  }, [installments, dateRange]);
+  }, [allCollectedItems, dateRange]);
 
-  const cashTotal = useMemo(() => filtered.filter(i => i.paymentMethod === 'Cash').reduce((s, i) => s + (i.amountPaid || 0), 0), [filtered]);
-  const bankTotal = useMemo(() => filtered.filter(i => i.paymentMethod === 'Bank Transfer').reduce((s, i) => s + (i.amountPaid || 0), 0), [filtered]);
-  const chequeTotal = useMemo(() => filtered.filter(i => i.paymentMethod === 'Cheque').reduce((s, i) => s + (i.amountPaid || 0), 0), [filtered]);
+  const normalizeMethod = (m: string) => {
+    const lower = (m || '').toLowerCase();
+    if (lower.includes('bank') || lower.includes('transfer') || lower.includes('online')) return 'Bank Transfer';
+    if (lower.includes('cheque') || lower.includes('check')) return 'Cheque';
+    return 'Cash';
+  };
+
+  const cashTotal = useMemo(() => filtered.filter(i => normalizeMethod(i.method) === 'Cash').reduce((s, i) => s + i.amount, 0), [filtered]);
+  const bankTotal = useMemo(() => filtered.filter(i => normalizeMethod(i.method) === 'Bank Transfer').reduce((s, i) => s + i.amount, 0), [filtered]);
+  const chequeTotal = useMemo(() => filtered.filter(i => normalizeMethod(i.method) === 'Cheque').reduce((s, i) => s + i.amount, 0), [filtered]);
   const grandTotal = cashTotal + bankTotal + chequeTotal;
+
+  // Single Source of Truth today metric
+  const collectedTodayAmount = useMemo(() => {
+    return computeCollectedToday(sales, allInstallments, dpTransactions).total;
+  }, [sales, allInstallments, dpTransactions]);
 
   // Monthly breakdown for last 6 months
   const monthlyData = useMemo(() => {
@@ -51,25 +147,25 @@ const CollectionReport: React.FC = () => {
       const monthLabel = format(d, 'MMM yy');
       const m = d.getMonth();
       const y = d.getFullYear();
-      const cash = installments
-        .filter(inst => inst.paymentDate && new Date(inst.paymentDate).getMonth() === m && new Date(inst.paymentDate).getFullYear() === y && inst.paymentMethod === 'Cash')
-        .reduce((s, inst) => s + (inst.amountPaid || 0), 0);
-      const bank = installments
-        .filter(inst => inst.paymentDate && new Date(inst.paymentDate).getMonth() === m && new Date(inst.paymentDate).getFullYear() === y && inst.paymentMethod === 'Bank Transfer')
-        .reduce((s, inst) => s + (inst.amountPaid || 0), 0);
-      const cheque = installments
-        .filter(inst => inst.paymentDate && new Date(inst.paymentDate).getMonth() === m && new Date(inst.paymentDate).getFullYear() === y && inst.paymentMethod === 'Cheque')
-        .reduce((s, inst) => s + (inst.amountPaid || 0), 0);
+      const cash = allCollectedItems
+        .filter(item => item.date.getMonth() === m && item.date.getFullYear() === y && normalizeMethod(item.method) === 'Cash')
+        .reduce((s, item) => s + item.amount, 0);
+      const bank = allCollectedItems
+        .filter(item => item.date.getMonth() === m && item.date.getFullYear() === y && normalizeMethod(item.method) === 'Bank Transfer')
+        .reduce((s, item) => s + item.amount, 0);
+      const cheque = allCollectedItems
+        .filter(item => item.date.getMonth() === m && item.date.getFullYear() === y && normalizeMethod(item.method) === 'Cheque')
+        .reduce((s, item) => s + item.amount, 0);
       return { month: monthLabel, Cash: cash, 'Bank Transfer': bank, Cheque: cheque };
     });
-  }, [installments]);
+  }, [allCollectedItems]);
 
   const handlePrint = () => {
     if (!company) { toast.error('Configure company settings'); return; }
     const rows = [
-      ['Cash', filtered.filter(i => i.paymentMethod === 'Cash').length.toString(), formatCurrency(cashTotal)],
-      ['Bank Transfer', filtered.filter(i => i.paymentMethod === 'Bank Transfer').length.toString(), formatCurrency(bankTotal)],
-      ['Cheque', filtered.filter(i => i.paymentMethod === 'Cheque').length.toString(), formatCurrency(chequeTotal)],
+      ['Cash', filtered.filter(i => normalizeMethod(i.method) === 'Cash').length.toString(), formatCurrency(cashTotal)],
+      ['Bank Transfer', filtered.filter(i => normalizeMethod(i.method) === 'Bank Transfer').length.toString(), formatCurrency(bankTotal)],
+      ['Cheque', filtered.filter(i => normalizeMethod(i.method) === 'Cheque').length.toString(), formatCurrency(chequeTotal)],
       ['TOTAL', filtered.length.toString(), formatCurrency(grandTotal)],
     ];
     const html = generateReportHTML(company, 'Collection Report', ['Payment Method', 'Count', 'Amount'], rows);
@@ -79,19 +175,19 @@ const CollectionReport: React.FC = () => {
   const handleExportCSV = () => {
     const headers = ['Payment Method', 'Transactions Count', 'Total Amount', 'Share Percentage'];
     const rows = [
-      ['Cash', filtered.filter(i => i.paymentMethod === 'Cash').length, cashTotal, grandTotal ? `${((cashTotal / grandTotal) * 100).toFixed(1)}%` : '0%'],
-      ['Bank Transfer', filtered.filter(i => i.paymentMethod === 'Bank Transfer').length, bankTotal, grandTotal ? `${((bankTotal / grandTotal) * 100).toFixed(1)}%` : '0%'],
-      ['Cheque', filtered.filter(i => i.paymentMethod === 'Cheque').length, chequeTotal, grandTotal ? `${((chequeTotal / grandTotal) * 100).toFixed(1)}%` : '0%'],
+      ['Cash', filtered.filter(i => normalizeMethod(i.method) === 'Cash').length, cashTotal, grandTotal ? `${((cashTotal / grandTotal) * 100).toFixed(1)}%` : '0%'],
+      ['Bank Transfer', filtered.filter(i => normalizeMethod(i.method) === 'Bank Transfer').length, bankTotal, grandTotal ? `${((bankTotal / grandTotal) * 100).toFixed(1)}%` : '0%'],
+      ['Cheque', filtered.filter(i => normalizeMethod(i.method) === 'Cheque').length, chequeTotal, grandTotal ? `${((chequeTotal / grandTotal) * 100).toFixed(1)}%` : '0%'],
       ['TOTAL', filtered.length, grandTotal, '100%']
     ];
     exportRowsToCsv('Collection-Report', headers, rows);
   };
 
   const kpis = [
+    { label: 'Collected Today', value: collectedTodayAmount, isCurrency: true, color: 'green' as const, hint: 'Karachi business day' },
     { label: 'Cash Inflow', value: cashTotal, isCurrency: true, color: 'green' as const, hint: 'Direct counter cash' },
     { label: 'Bank Transfers', value: bankTotal, isCurrency: true, color: 'blue' as const, hint: 'Online & direct bank' },
-    { label: 'Cheque Clearance', value: chequeTotal, isCurrency: true, color: 'amber' as const, hint: 'Cleared instruments' },
-    { label: 'Total Collections', value: grandTotal, isCurrency: true, color: 'navy' as const, hint: 'Gross collected inflow' },
+    { label: 'Total Collections', value: grandTotal, isCurrency: true, color: 'navy' as const, hint: 'Selected period inflow' },
   ];
 
   return (
@@ -157,9 +253,9 @@ const CollectionReport: React.FC = () => {
         </thead>
         <tbody>
           {[
-            { method: 'Cash', count: filtered.filter(i => i.paymentMethod === 'Cash').length, amt: cashTotal, color: 'text-emerald-700' },
-            { method: 'Bank Transfer', count: filtered.filter(i => i.paymentMethod === 'Bank Transfer').length, amt: bankTotal, color: 'text-blue-700' },
-            { method: 'Cheque', count: filtered.filter(i => i.paymentMethod === 'Cheque').length, amt: chequeTotal, color: 'text-amber-700' },
+            { method: 'Cash', count: filtered.filter(i => normalizeMethod(i.method) === 'Cash').length, amt: cashTotal, color: 'text-emerald-700' },
+            { method: 'Bank Transfer', count: filtered.filter(i => normalizeMethod(i.method) === 'Bank Transfer').length, amt: bankTotal, color: 'text-blue-700' },
+            { method: 'Cheque', count: filtered.filter(i => normalizeMethod(i.method) === 'Cheque').length, amt: chequeTotal, color: 'text-amber-700' },
           ].map(row => {
             const pct = grandTotal ? ((row.amt / grandTotal) * 100).toFixed(1) : '0';
             return (

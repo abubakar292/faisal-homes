@@ -9,6 +9,12 @@ import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Installment, Customer, Plot, CompanySettings } from '../../types';
+import {
+  isDateInRangeKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+  getInstallmentOutstanding,
+} from '../../domain/metrics';
 
 const InstallmentReport: React.FC = () => {
   const { data: installments, loading: loadingInst } = useLiveCollection<Installment>('installments');
@@ -40,8 +46,13 @@ const InstallmentReport: React.FC = () => {
     return installments.filter(i => {
       if (filterStatus && i.status !== filterStatus) return false;
       const d = i.paymentDate ? new Date(i.paymentDate) : new Date(i.dueDate);
-      if (dateRange.start && d < dateRange.start) return false;
-      if (dateRange.end && d > dateRange.end) return false;
+      if (dateRange.start && dateRange.end) {
+        if (!isDateInRangeKarachi(d, dateRange.start, dateRange.end)) return false;
+      } else if (dateRange.start) {
+        if (d.getTime() < startOfDayKarachi(dateRange.start).getTime()) return false;
+      } else if (dateRange.end) {
+        if (d.getTime() > endOfDayKarachi(dateRange.end).getTime()) return false;
+      }
 
       if (search.trim()) {
         const q = search.toLowerCase().trim();
@@ -57,15 +68,15 @@ const InstallmentReport: React.FC = () => {
   }, [installments, filterStatus, dateRange, search, customers, plots]);
 
   const totalPaid = useMemo(() => {
-    return filtered.filter(i => i.status === 'paid').reduce((s, i) => s + (i.amountPaid || 0), 0);
+    return filtered.filter(i => i.status === 'paid').reduce((s, i) => s + (Number(i.amountPaid) || 0), 0);
   }, [filtered]);
 
   const totalScheduled = useMemo(() => {
-    return filtered.reduce((s, i) => s + (i.amountDue || 0), 0);
+    return filtered.reduce((s, i) => s + (Number(i.amountDue) || 0), 0);
   }, [filtered]);
 
   const totalOutstanding = useMemo(() => {
-    return filtered.reduce((s, i) => s + Math.max(0, (i.amountDue || 0) - (i.amountPaid || 0)), 0);
+    return filtered.reduce((s, i) => s + getInstallmentOutstanding(i), 0);
   }, [filtered]);
 
   const handlePrint = () => {

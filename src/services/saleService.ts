@@ -96,44 +96,93 @@ export interface BookingDetailsInput {
   notes?: string;
 }
 
-export interface SaveBookingOnlyInput {
-  customer: SaleCustomerInput;
-  plotId: string;
-  bookingDate: Date | string;
-  perMarlaRate: number;
-  totalPrice: number;
-  bookingAmount: number;
-  paymentMethod: PaymentMethod;
-  bankName?: string;
-  chequeNumber?: string;
-  referenceNumber?: string;
-  notes?: string;
-}
+import { z } from 'zod';
 
-export interface SaveSaleInput {
-  customer: SaleCustomerInput;
-  plotId: string;
-  existingBookingId?: string;
-  booking?: BookingDetailsInput;
-  saleDate: Date | string;
-  totalPrice: number;
-  perMarlaRate?: number;
-  discount?: number;
-  downPaymentPercent?: number;
-  downPaymentAmount?: number;
-  includeRemainingDownPayment?: boolean;
-  onPossessionEnabled?: boolean;
-  onPossessionAmount?: number;
-  onPossessionDate?: Date | string | null;
-  onPossessionNotes?: string;
-  semiAnnualEnabled?: boolean;
-  semiAnnualAmount?: number;
-  rows: InstallmentRow[];
-  paymentPlanId?: string;
-  paymentPlanName?: string;
-  paymentPlanModified?: boolean;
-  dealer?: SaleDealerInput;
-}
+export const saleCustomerInputSchema = z.object({
+  existingId: z.string().optional(),
+  newCustomer: z.any().optional(),
+  nominee: z.any().optional(),
+  documents: z.any().optional(),
+}).refine(data => Boolean(data.existingId || data.newCustomer), {
+  message: 'Customer information is required (select existing or register new).',
+});
+
+export const bookingDetailsInputSchema = z.object({
+  bookingDate: z.union([z.date(), z.string()]).optional(),
+  bookingAmount: z.number().min(0, 'Booking amount cannot be negative.').optional(),
+  paymentMethod: z.any().optional(),
+  bankName: z.string().optional(),
+  chequeNumber: z.string().optional(),
+  referenceNumber: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const installmentRowSchema: z.ZodType<InstallmentRow> = z.object({
+  id: z.string(),
+  months: z.number().min(1, 'Months must be at least 1.'),
+  intervalMonths: z.number().optional(),
+  planAuto: z.boolean().optional(),
+  monthlyAmount: z.number().min(0, 'Monthly amount cannot be negative.'),
+  totalAmount: z.number().min(0, 'Total amount cannot be negative.'),
+});
+
+export const saveSaleInputSchema = z.object({
+  customer: saleCustomerInputSchema,
+  plotId: z.string().min(1, 'Please select a plot for this sale.'),
+  existingBookingId: z.string().optional(),
+  booking: bookingDetailsInputSchema.optional(),
+  saleDate: z.union([z.date(), z.string()], { message: 'Sale date is required.' }),
+  totalPrice: z.number().positive('Total plot price must be greater than zero.'),
+  perMarlaRate: z.number().optional(),
+  discount: z.number().min(0, 'Discount cannot be negative.').optional(),
+  downPaymentPercent: z.number().min(0).max(100).optional(),
+  downPaymentAmount: z.number().min(0).optional(),
+  includeRemainingDownPayment: z.boolean().optional(),
+  onPossessionEnabled: z.boolean().optional(),
+  onPossessionAmount: z.number().min(0).optional(),
+  onPossessionDate: z.union([z.date(), z.string()]).nullable().optional(),
+  onPossessionNotes: z.string().optional(),
+  semiAnnualEnabled: z.boolean().optional(),
+  semiAnnualAmount: z.number().min(0).optional(),
+  rows: z.array(installmentRowSchema).min(1, 'At least one installment row is required in the payment schedule.'),
+  paymentPlanId: z.string().optional(),
+  paymentPlanName: z.string().optional(),
+  paymentPlanModified: z.boolean().optional(),
+  dealer: z.any().optional(),
+}).refine(data => {
+  const discount = data.discount || 0;
+  return discount < data.totalPrice;
+}, {
+  message: 'Discount cannot exceed or equal total price.',
+  path: ['discount'],
+}).refine(data => {
+  const dpAmount = data.downPaymentAmount || 0;
+  const bookingAmt = data.booking?.bookingAmount || 0;
+  return bookingAmt <= dpAmount;
+}, {
+  message: 'Booking amount cannot exceed total down payment amount.',
+  path: ['booking', 'bookingAmount'],
+});
+
+export const saveBookingOnlyInputSchema = z.object({
+  customer: saleCustomerInputSchema,
+  plotId: z.string().min(1, 'Please select a plot to book.'),
+  bookingDate: z.union([z.date(), z.string()], { message: 'Booking date is required.' }),
+  perMarlaRate: z.number().optional(),
+  totalPrice: z.number().positive('Total price must be greater than zero.'),
+  bookingAmount: z.number().positive('Booking advance amount must be greater than zero.'),
+  paymentMethod: z.any(),
+  bankName: z.string().optional(),
+  chequeNumber: z.string().optional(),
+  referenceNumber: z.string().optional(),
+  notes: z.string().optional(),
+}).refine(data => data.bookingAmount <= data.totalPrice, {
+  message: 'Booking advance cannot exceed total plot price.',
+  path: ['bookingAmount'],
+});
+
+export type SaveSaleInput = z.infer<typeof saveSaleInputSchema>;
+export type SaveBookingOnlyInput = z.infer<typeof saveBookingOnlyInputSchema>;
 
 export interface SubmitServiceResult {
   customerId: string;
@@ -147,6 +196,10 @@ export interface SubmitServiceResult {
  * Saves a new booking only with atomic Firestore writeBatch
  */
 export async function saveBookingOnly(input: SaveBookingOnlyInput): Promise<SubmitServiceResult> {
+  const parsed = saveBookingOnlyInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message || 'Invalid booking details');
+  }
   const plotRef = doc(db, 'plots', input.plotId);
   const plotSnap = await getDoc(plotRef);
 
@@ -234,6 +287,11 @@ export async function saveBookingOnly(input: SaveBookingOnlyInput): Promise<Subm
  * Saves a completed Sale with all installments, plot update, dealer ledger & commission
  */
 export async function saveSale(input: SaveSaleInput): Promise<SubmitServiceResult> {
+  const parsed = saveSaleInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message || 'Invalid sale details');
+  }
+
   const plotRef = doc(db, 'plots', input.plotId);
   const plotSnap = await getDoc(plotRef);
 

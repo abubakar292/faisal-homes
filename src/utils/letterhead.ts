@@ -164,7 +164,6 @@ export const LETTERHEAD_CSS = `
   }
   table.lh-doc {
     width: 210mm;
-    min-height: 297mm;
     border-collapse: collapse;
     border-spacing: 0;
     margin: 0;
@@ -794,14 +793,21 @@ function buildReportDocumentHTML(opt: ReportOptions, headerCompactUrl: string, l
   const subtitleLine = `${opt.subtitle ? opt.subtitle + ' | ' : ''}Printed on ${printDateStr}${printedByStr}`;
 
   const theadCols = (opt.headers || []).map((h) => `<th>${h}</th>`).join('');
-  const tbodyRows = (opt.rows || []).map((row) => {
-    const tds = row.map((cell) => `<td>${cell !== undefined && cell !== null ? cell : ''}</td>`).join('');
-    return `<tr>${tds}</tr>`;
-  }).join('');
 
   const totalsHtml = opt.totalsRow
-    ? `<tr class="lh-report-totals-row">${opt.totalsRow.map((c) => `<td>${c !== undefined && c !== null ? c : ''}</td>`).join('')}</tr>`
+    ? `<tr class="lh-report-totals-row" style="break-before:avoid;page-break-before:avoid;break-inside:avoid;page-break-inside:avoid;">${opt.totalsRow.map((c) => `<td>${c !== undefined && c !== null ? c : ''}</td>`).join('')}</tr>`
+    : opt.summary
+    ? `<tr class="lh-report-totals-row" style="break-before:avoid;page-break-before:avoid;break-inside:avoid;page-break-inside:avoid;"><td colspan="${Math.max(1, (opt.headers || []).length)}" style="text-align:right;font-weight:bold;padding:6px 8px;background:#f1f5f9;">${opt.summary}</td></tr>`
     : '';
+
+  const hasTotals = Boolean(totalsHtml);
+  const rows = opt.rows || [];
+  const tbodyRows = rows.map((row, idx) => {
+    const isLastDataRow = idx === rows.length - 1;
+    const tds = row.map((cell) => `<td>${cell !== undefined && cell !== null ? cell : ''}</td>`).join('');
+    const avoidBreak = isLastDataRow && hasTotals ? ' class="last-data-row" style="break-after:avoid;page-break-after:avoid;"' : '';
+    return `<tr${avoidBreak}>${tds}</tr>`;
+  }).join('');
 
   return `<!DOCTYPE html>
 <html>
@@ -815,15 +821,56 @@ ${isLandscape ? `
     size: A4 landscape;
     margin: 0;
   }
-  html, body, .lh-page-origin {
+  html, body, .lh-page-origin, table.lh-report-table-doc {
     width: 297mm !important;
   }
-` : ''}
+  .lh-report-header-img {
+    width: 297mm !important;
+    height: 22.8mm !important;
+  }
+  .lh-report-footer-wrap {
+    width: 297mm !important;
+  }
+` : `
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html, body, .lh-page-origin, table.lh-report-table-doc {
+    width: 210mm !important;
+  }
+  .lh-report-header-img {
+    width: 210mm !important;
+    height: 22.8mm !important;
+  }
+  .lh-report-footer-wrap {
+    width: 210mm !important;
+  }
+`}
+  table.lh-report-table-doc {
+    min-height: auto !important;
+    border-collapse: collapse;
+    width: 100% !important;
+  }
+  .lh-report-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .lh-report-totals-row {
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .last-data-row {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
   </style>
 </head>
 <body class="lh-doc">
-  <div class="lh-page-origin lh-doc ${isLandscape ? 'landscape' : ''}">
-    <table class="lh-report-table-doc lh-doc" style="width:100%;border-collapse:collapse;">
+  <div class="lh-page-origin ${isLandscape ? 'landscape' : ''}">
+    <table class="lh-report-table-doc" style="border-collapse:collapse;">
       <thead>
         <tr>
           <td style="padding:0;">

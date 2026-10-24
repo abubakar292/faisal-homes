@@ -8,6 +8,12 @@ import { useLiveCollection } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Sale, Customer, Plot, CompanySettings } from '../../types';
+import {
+  computeSalesTotals,
+  isDateInRangeKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+} from '../../domain/metrics';
 
 const SaleReport: React.FC = () => {
   const { data: sales, loading: loadingSales } = useLiveCollection<Sale>('sales');
@@ -36,9 +42,15 @@ const SaleReport: React.FC = () => {
 
   const filtered = useMemo(() => {
     return sales.filter(s => {
+      if (s.status === 'cancelled') return false;
       const d = new Date(s.saleDate || s.createdAt);
-      if (dateRange.start && d < dateRange.start) return false;
-      if (dateRange.end && d > dateRange.end) return false;
+      if (dateRange.start && dateRange.end) {
+        if (!isDateInRangeKarachi(d, dateRange.start, dateRange.end)) return false;
+      } else if (dateRange.start) {
+        if (d.getTime() < startOfDayKarachi(dateRange.start).getTime()) return false;
+      } else if (dateRange.end) {
+        if (d.getTime() > endOfDayKarachi(dateRange.end).getTime()) return false;
+      }
 
       if (search.trim()) {
         const q = search.toLowerCase().trim();
@@ -55,9 +67,10 @@ const SaleReport: React.FC = () => {
     });
   }, [sales, dateRange, search, customers, plots]);
 
-  const totalSales = useMemo(() => filtered.reduce((sum, s) => sum + (s.finalPrice || 0), 0), [filtered]);
-  const totalDownPayment = useMemo(() => filtered.reduce((sum, s) => sum + (s.downPayment || 0), 0), [filtered]);
-  const totalRemaining = useMemo(() => filtered.reduce((sum, s) => sum + (s.remainingAmount || 0), 0), [filtered]);
+  const salesTotals = useMemo(() => computeSalesTotals(filtered), [filtered]);
+  const totalSales = salesTotals.finalPrice;
+  const totalDownPayment = useMemo(() => filtered.reduce((sum, s) => sum + (Number(s.downPaymentAmount || s.downPayment) || 0), 0), [filtered]);
+  const totalRemaining = useMemo(() => filtered.reduce((sum, s) => sum + (Number(s.remainingAmount) || 0), 0), [filtered]);
 
   const handlePrint = () => {
     if (!company) { toast.error('Configure company settings'); return; }

@@ -12,6 +12,15 @@ import { printContent, generateReportHTML } from '../../utils/printUtils';
 import { buildCustomerLedgers } from '../../utils/ledger';
 import type { Installment, Customer, Plot, CompanySettings, Sale, DownPaymentTransaction } from '../../types';
 
+import {
+  isInstallmentOverdue,
+  getInstallmentOutstanding,
+  getDaysOverdueKarachi,
+  isDateInRangeKarachi,
+  startOfDayKarachi,
+  endOfDayKarachi,
+} from '../../domain/metrics';
+
 type ViewMode = 'installments' | 'customers';
 
 const PendingPaymentsReport: React.FC = () => {
@@ -29,7 +38,7 @@ const PendingPaymentsReport: React.FC = () => {
   const installments = useMemo(() => {
     const activeSales = new Set(sales.filter(sale => sale.status !== 'cancelled').map(sale => sale.id));
     return rawInsts.filter(i => {
-      if (!activeSales.has(i.saleId) || getOutstanding(i) <= 0) return false;
+      if (!activeSales.has(i.saleId) || getInstallmentOutstanding(i) <= 0) return false;
       if (i.type === 'down_payment') return false;
       return true;
     });
@@ -61,11 +70,12 @@ const PendingPaymentsReport: React.FC = () => {
   // ─── INSTALLMENTS VIEW LOGIC ───
   const filteredInsts = useMemo(() => {
     let result = [...installments];
-    if (dateRange.start) {
-      result = result.filter(i => new Date(i.dueDate) >= dateRange.start!);
-    }
-    if (dateRange.end) {
-      result = result.filter(i => new Date(i.dueDate) <= dateRange.end!);
+    if (dateRange.start && dateRange.end) {
+      result = result.filter(i => isDateInRangeKarachi(i.dueDate, dateRange.start!, dateRange.end!));
+    } else if (dateRange.start) {
+      result = result.filter(i => i.dueDate && new Date(i.dueDate).getTime() >= startOfDayKarachi(dateRange.start!).getTime());
+    } else if (dateRange.end) {
+      result = result.filter(i => i.dueDate && new Date(i.dueDate).getTime() <= endOfDayKarachi(dateRange.end!).getTime());
     }
     if (search.trim()) {
       const q = search.toLowerCase().trim();
@@ -81,15 +91,19 @@ const PendingPaymentsReport: React.FC = () => {
       });
     }
 
-    return result.sort((a, b) => daysOverdue(b) - daysOverdue(a));
+    return result.sort((a, b) => getDaysOverdueKarachi(b.dueDate) - getDaysOverdueKarachi(a.dueDate));
   }, [installments, dateRange, search, customers, plots]);
 
   const totalOutstandingAmount = useMemo(() => {
-    return filteredInsts.reduce((s, i) => s + getOutstanding(i), 0);
+    return filteredInsts.reduce((s, i) => s + getInstallmentOutstanding(i), 0);
+  }, [filteredInsts]);
+
+  const totalOverdueAmount = useMemo(() => {
+    return filteredInsts.filter(i => isInstallmentOverdue(i)).reduce((s, i) => s + getInstallmentOutstanding(i), 0);
   }, [filteredInsts]);
 
   const overdueCount = useMemo(() => {
-    return filteredInsts.filter(i => daysOverdue(i) > 0).length;
+    return filteredInsts.filter(i => isInstallmentOverdue(i)).length;
   }, [filteredInsts]);
 
   const buildWaMsg = (inst: Installment, customer: Customer) => {
@@ -224,8 +238,8 @@ const PendingPaymentsReport: React.FC = () => {
 
   const kpis = [
     { label: 'Pending Installments', value: filteredInsts.length, color: 'amber' as const, hint: 'Unpaid or partial' },
-    { label: 'Total Outstanding', value: totalOutstandingAmount, isCurrency: true, color: 'red' as const, hint: 'Receivable total' },
-    { label: 'Overdue Installments', value: overdueCount, color: 'red' as const, hint: 'Past due date' },
+    { label: 'Total Outstanding', value: totalOutstandingAmount, isCurrency: true, color: 'navy' as const, hint: 'All pending balance' },
+    { label: 'Overdue Amount', value: totalOverdueAmount, isCurrency: true, color: 'red' as const, hint: `${overdueCount} past due` },
     { label: 'Defaulter Customers', value: new Set(filteredInsts.map(i => i.customerId)).size, color: 'navy' as const, hint: 'Unique buyers' },
   ];
 

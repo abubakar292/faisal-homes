@@ -1,4 +1,10 @@
-import { format, isValid, startOfDay, differenceInDays } from 'date-fns';
+import { format, isValid } from 'date-fns';
+import {
+  getDaysOverdueKarachi,
+  getDaysUntilDueKarachi,
+  isInstallmentOverdue as isDomainInstallmentOverdue,
+  getInstallmentOutstanding,
+} from '../domain/metrics';
 
 export const formatCurrency = (amount: number): string => {
   if (isNaN(amount)) return 'Rs. 0';
@@ -63,12 +69,11 @@ export const shortenText = (text: string, maxLen = 30): string => {
 };
 
 export const getDaysOverdue = (dueDate: Date): number => {
-  const diff = differenceInDays(startOfDay(new Date()), startOfDay(dueDate));
-  return Math.max(0, diff);
+  return getDaysOverdueKarachi(dueDate);
 };
 
 export const getOutstanding = (inst: any): number => {
-  return Math.max(0, (inst.amountDue || 0) - (inst.amountPaid || 0));
+  return getInstallmentOutstanding(inst);
 };
 
 const parseDate = (d: any): Date | null => {
@@ -79,25 +84,22 @@ const parseDate = (d: any): Date | null => {
 };
 
 export const daysOverdue = (inst: any, today: Date = new Date()): number => {
-  const due = parseDate(inst.dueDate);
+  const due = parseDate(inst?.dueDate);
   if (!due) return 0;
-  const diff = differenceInDays(startOfDay(today), startOfDay(due));
-  return Math.max(0, diff);
+  return getDaysOverdueKarachi(due, today);
 };
 
 export const daysUntilDue = (inst: any, today: Date = new Date()): number => {
-  const due = parseDate(inst.dueDate);
+  const due = parseDate(inst?.dueDate);
   if (!due) return 0;
-  const diff = differenceInDays(startOfDay(due), startOfDay(today));
-  return Math.max(0, diff);
+  return getDaysUntilDueKarachi(due, today);
 };
 
-export const isInstallmentOverdue = (inst: any): boolean => {
+export const isInstallmentOverdue = (inst: any, today: Date = new Date()): boolean => {
   if (!inst) return false;
-  // Down payments are tracked in down-payment management, never as regular overdue installments
   if (inst.type === 'down_payment') return false;
-  if (inst.status === 'paid' || inst.status === 'cancelled') return false;
-  return getOutstanding(inst) > 0 && daysOverdue(inst) > 0;
+  if (inst.status === 'cancelled') return false;
+  return isDomainInstallmentOverdue(inst, today);
 };
 
 export const getInstallmentStatus = (inst: any): string => {

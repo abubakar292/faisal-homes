@@ -8,6 +8,7 @@ import { getDocument } from '../../firebase/firestore';
 import { useLiveCollection } from '../../data/liveStore';
 import { printContent, generateReportHTML } from '../../utils/printUtils';
 import type { Plot, CompanySettings } from '../../types';
+import { computePlotCounts } from '../../domain/metrics';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 
 const PIE_COLORS = ['#22c55e', '#e8a020', '#2557a7', '#ef4444', '#8b5cf6'];
@@ -30,8 +31,7 @@ const PlotStatusReport: React.FC = () => {
     return () => { active = false; };
   }, []);
 
-  const byStatus = (status: string) => plots.filter(p => p.status === status);
-
+  const counts = React.useMemo(() => computePlotCounts(plots), [plots]);
   const blocks = Array.from(new Set(plots.map(p => p.block))).filter(Boolean).sort();
 
   const byBlock = plots.reduce((acc, p) => {
@@ -42,10 +42,10 @@ const PlotStatusReport: React.FC = () => {
   }, {} as Record<string, Record<string, number>>);
 
   const pieData = [
-    { name: 'Available', value: byStatus('available').length },
-    { name: 'Booked', value: byStatus('booked').length },
-    { name: 'Sold', value: byStatus('sold').length },
-    { name: 'Cancelled', value: byStatus('cancelled').length },
+    { name: 'Available', value: counts.available },
+    { name: 'Booked', value: counts.booked },
+    { name: 'Sold', value: counts.sold },
+    { name: 'Cancelled', value: counts.cancelled },
   ].filter(d => d.value > 0);
 
   const filteredPlots = plots.filter(p => {
@@ -61,10 +61,10 @@ const PlotStatusReport: React.FC = () => {
   }).sort((a, b) => a.block.localeCompare(b.block) || a.plotNumber.localeCompare(b.plotNumber, undefined, { numeric: true }));
 
   const kpis: ReportKpi[] = [
-    { label: 'Total Plots', value: plots.length, color: 'navy', hint: `${blocks.length} blocks mapped` },
-    { label: 'Available', value: byStatus('available').length, color: 'green', hint: 'Ready for booking' },
-    { label: 'Booked', value: byStatus('booked').length, color: 'amber', hint: 'Pending full sale' },
-    { label: 'Sold', value: byStatus('sold').length, color: 'blue', hint: 'Under active agreement' },
+    { label: 'Total Plots', value: counts.total, color: 'navy', hint: `${blocks.length} blocks mapped` },
+    { label: 'Available', value: counts.available, color: 'green', hint: 'Ready for booking' },
+    { label: 'Booked', value: counts.booked, color: 'amber', hint: 'Pending full sale' },
+    { label: 'Sold', value: counts.sold, color: 'blue', hint: 'Under active agreement' },
   ];
 
   const handlePrint = () => {
