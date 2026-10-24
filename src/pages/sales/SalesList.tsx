@@ -5,15 +5,18 @@ import {
   FileText, Printer, Search, Eye, Plus, BookOpen,
   Receipt, X, ChevronRight, User, Home, DollarSign,
   Calendar, Phone, ShieldCheck, Handshake, Filter,
-  ArrowUpDown, ExternalLink
+  ArrowUpDown, ExternalLink, Trash2, Ban
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/ui/PageHeader';
 import StatusBadge from '../../components/ui/StatusBadge';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { useAuth } from '../../contexts/AuthContext';
 import { useLiveCollection, useLiveDocument } from '../../data/liveStore';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { consolidateSaleInstallments } from '../../utils/saleCalc';
 import { printContent, generatePlotAgreement, generateInstallmentSchedule } from '../../utils/printUtils';
+import { cancelSale, deleteSale } from '../../services/saleService';
 import type { Sale, Customer, Plot, Installment, CompanySettings, Dealer } from '../../types';
 import { useScrollLock } from '../../hooks/useScrollLock';
 
@@ -37,6 +40,11 @@ export default function SalesList() {
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'price_desc' | 'price_asc'>('date_desc');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 15;
+
+  const { isAdmin } = useAuth();
+  const [cancelTargetSale, setCancelTargetSale] = useState<Sale | null>(null);
+  const [deleteTargetSale, setDeleteTargetSale] = useState<Sale | null>(null);
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   // Drawer state
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -98,6 +106,42 @@ export default function SalesList() {
       });
     } else {
       setSelectedSale(null);
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelTargetSale) return;
+    try {
+      setActionInProgress(true);
+      await cancelSale(cancelTargetSale.id);
+      toast.success('Sale cancelled. Plot is now available.');
+      setCancelTargetSale(null);
+      if (selectedSale?.id === cancelTargetSale.id) {
+        closeDrawer();
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || 'Failed to cancel sale');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetSale) return;
+    try {
+      setActionInProgress(true);
+      await deleteSale(deleteTargetSale.id);
+      toast.success('Sale permanently deleted. Plot is now available.');
+      setDeleteTargetSale(null);
+      if (selectedSale?.id === deleteTargetSale.id) {
+        closeDrawer();
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || 'Failed to delete sale');
+    } finally {
+      setActionInProgress(false);
     }
   };
 
@@ -561,6 +605,17 @@ export default function SalesList() {
                           >
                             <Receipt size={16} />
                           </button>
+
+                          {/* Delete Sale (Admin only) */}
+                          {isAdmin && (
+                            <button
+                              onClick={() => setDeleteTargetSale(sale)}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/80 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                              title="Delete Sale"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -902,11 +957,65 @@ export default function SalesList() {
                     </div>
                   </div>
                 )}
+
+                {/* Administrative Controls */}
+                {isAdmin && (
+                  <div className="p-4 rounded-xl border border-red-200 bg-red-50/60 space-y-2.5">
+                    <h4 className="font-bold text-red-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      Administrative Actions
+                    </h4>
+                    <p className="text-[11px] text-red-700 leading-relaxed">
+                      Manage erroneous or cancelled sales. Performing these actions will free the associated plot back to Available status.
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      {selectedSale.status !== 'cancelled' && (
+                        <button
+                          type="button"
+                          onClick={() => setCancelTargetSale(selectedSale)}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border border-red-300 text-red-700 bg-white hover:bg-red-50 font-semibold text-xs transition-colors"
+                        >
+                          <Ban size={14} /> Cancel Sale
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTargetSale(selectedSale)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors shadow-sm"
+                      >
+                        <Trash2 size={14} /> Delete Sale
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Confirm Dialog for Cancel Sale */}
+      <ConfirmDialog
+        isOpen={!!cancelTargetSale}
+        onClose={() => setCancelTargetSale(null)}
+        onConfirm={handleConfirmCancel}
+        loading={actionInProgress}
+        title="Cancel Sale"
+        message={`Are you sure you want to cancel sale #${cancelTargetSale?.saleNumber || cancelTargetSale?.id.slice(0, 8)}? The plot will become available again, and all unpaid installments will be cancelled.`}
+        confirmLabel="Yes, Cancel Sale"
+        confirmVariant="danger"
+      />
+
+      {/* Confirm Dialog for Delete Sale */}
+      <ConfirmDialog
+        isOpen={!!deleteTargetSale}
+        onClose={() => setDeleteTargetSale(null)}
+        onConfirm={handleConfirmDelete}
+        loading={actionInProgress}
+        title="Permanently Delete Sale"
+        message={`Are you sure you want to permanently delete sale #${deleteTargetSale?.saleNumber || deleteTargetSale?.id.slice(0, 8)}? This will remove all associated installments, commissions, and ledger entries, and revert the plot to Available.`}
+        confirmLabel="Yes, Delete Permanently"
+        confirmVariant="danger"
+      />
     </div>
   );
 }

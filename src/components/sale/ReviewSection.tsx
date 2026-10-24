@@ -99,6 +99,21 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
   const remainingCount = Math.max(0, previewInstallments.length - 6);
   const allValid = validationChecklist.every(item => item.valid);
 
+  const monthlyDocs = previewInstallments.filter(i => i.type === 'monthly');
+  const semiDocs = previewInstallments.filter(i => i.type === 'semi_annual');
+  const possessionDocs = previewInstallments.filter(i => i.type === 'on_possession');
+  const totalInstallmentsCount = monthlyDocs.length + semiDocs.length + possessionDocs.length;
+  const firstDueDate = previewInstallments.length > 0 ? previewInstallments[0].dueDate : null;
+  const lastDueDate = previewInstallments.length > 0 ? previewInstallments[previewInstallments.length - 1].dueDate : null;
+  const monthlyAmount = monthlyDocs.length > 0 ? monthlyDocs[0].amountDue : 0;
+  const semiAnnualAmount = pricingSummary.semiAnnualAmount || 0;
+  const semiAnnualCount = semiDocs.length;
+  const scheduleTotal = previewInstallments
+    .filter(i => i.type !== 'down_payment')
+    .reduce((s, i) => s + (i.amountDue || 0), 0);
+  const requiredTotal = planSummary.remainingForInstallments;
+  const isScheduleBalanced = Math.abs(scheduleTotal - requiredTotal) <= 1 && totalInstallmentsCount > 0;
+
   return (
     <div className="space-y-6">
       {/* Validation Checklist Banner */}
@@ -227,36 +242,72 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
           </div>
         </div>
 
-        {/* Plan & Dealer Card */}
-        <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
+        {/* Plan & Schedule Summary Card */}
+        <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5">
           <div className="flex justify-between items-center border-b pb-2">
-            <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
-              {mode === 'booking' ? 'Booking Info' : 'Plan & Dealer'}
+            <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <Calendar size={13} className="text-[#1a3c6e]" /> Installment Plan Details
             </span>
             {mode === 'sale' && (
-              <span className="font-semibold text-slate-600">
-                {planSummary.totalMonths} Months
+              <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                isScheduleBalanced
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border-rose-200'
+              }`}>
+                {isScheduleBalanced ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+                {isScheduleBalanced ? 'Balanced' : 'Mismatch'}
               </span>
             )}
           </div>
+
           {mode === 'sale' ? (
-            <div className="space-y-1 text-slate-600">
+            <div className="space-y-1.5 text-xs text-slate-600">
               <div className="flex justify-between">
-                <span>Regular Installments:</span>
-                <span>{planSummary.regularCount} installments</span>
+                <span>Number of Installments:</span>
+                <span className="font-bold text-slate-800">
+                  {monthlyDocs.length} Monthly
+                  {semiDocs.length > 0 ? ` + ${semiDocs.length} Semi-Annual` : ''}
+                  {possessionDocs.length > 0 ? ` + 1 Possession` : ''}
+                  <span className="font-normal text-slate-500 ml-1">({totalInstallmentsCount} total)</span>
+                </span>
               </div>
-              {pricingSummary.semiAnnualEnabled && (
+
+              {firstDueDate && lastDueDate && (
                 <div className="flex justify-between">
-                  <span>Semi-Annual Payments:</span>
-                  <span>{formatCurrency(pricingSummary.semiAnnualAmount)} / 6 mo</span>
+                  <span>First & Last Due Date:</span>
+                  <span className="font-medium text-slate-700">
+                    {formatDate(firstDueDate)} to {formatDate(lastDueDate)}
+                  </span>
                 </div>
               )}
-              {pricingSummary.onPossessionEnabled && (
+
+              {monthlyAmount > 0 && (
+                <div className="flex justify-between">
+                  <span>Monthly Amount:</span>
+                  <span className="font-semibold text-slate-800">
+                    {formatCurrency(monthlyAmount)}
+                  </span>
+                </div>
+              )}
+
+              {pricingSummary.semiAnnualEnabled && semiAnnualAmount > 0 && (
+                <div className="flex justify-between">
+                  <span>Semi-Annual Amount x Count:</span>
+                  <span className="font-semibold text-slate-800">
+                    {formatCurrency(semiAnnualAmount)} x {semiAnnualCount} = {formatCurrency(semiAnnualAmount * semiAnnualCount)}
+                  </span>
+                </div>
+              )}
+
+              {pricingSummary.onPossessionEnabled && pricingSummary.onPossessionAmount > 0 && (
                 <div className="flex justify-between">
                   <span>On Possession:</span>
-                  <span>{formatCurrency(pricingSummary.onPossessionAmount)}</span>
+                  <span className="font-semibold text-slate-800">
+                    {formatCurrency(pricingSummary.onPossessionAmount)}
+                  </span>
                 </div>
               )}
+
               <div className="flex justify-between pt-1 border-t">
                 <span>Dealer:</span>
                 <span className="font-semibold text-slate-800">
@@ -265,9 +316,23 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
                     : `${dealerSummary.name || 'Assigned'} (${formatCurrency(dealerSummary.commissionAmount)})`}
                 </span>
               </div>
+
+              <div className="flex justify-between items-center pt-2 border-t font-semibold">
+                <span>Schedule total vs required:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className={isScheduleBalanced ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
+                    {formatCurrency(scheduleTotal)} of {formatCurrency(requiredTotal)}
+                  </span>
+                  {isScheduleBalanced ? (
+                    <CheckCircle size={15} className="text-emerald-600" />
+                  ) : (
+                    <AlertCircle size={15} className="text-rose-600" />
+                  )}
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="space-y-1 text-slate-600">
+            <div className="space-y-1 text-slate-600 text-xs">
               <div className="flex justify-between">
                 <span>Advance Booking:</span>
                 <span className="font-semibold">{formatCurrency(bookingSummary.amount)}</span>

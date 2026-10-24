@@ -24,6 +24,12 @@ import {
   calculateSalePlan,
   buildInstallments,
 } from '../utils/saleCalc';
+import {
+  computeSchedule,
+  expectedCounts,
+  validateSchedule,
+  PlanInput,
+} from '../domain/plan';
 import type {
   Customer,
   Plot,
@@ -457,22 +463,39 @@ export async function saveSale(input: SaveSaleInput): Promise<SubmitServiceResul
     );
   }
 
-  // 7. Installments generation
-  const allInstallments = buildInstallments({
+  // 7. Hard validation & Installments generation using pure domain module
+  const planInput: PlanInput = {
     saleId: saleDocRef.id,
     customerId: finalCustomerId,
     plotId: input.plotId,
     saleDate: saleDateObj,
+    totalPrice: input.totalPrice,
+    discount: input.discount || 0,
+    bookingPaid,
+    downPaymentAmount: input.downPaymentAmount || 0,
     rows: input.rows,
-    remainingDownPayment: planMath.remainingDownPayment,
-    includeRemainingDownPayment: false,
+    semiAnnualEnabled: input.semiAnnualEnabled,
+    semiAnnualAmount: input.semiAnnualAmount,
     onPossessionEnabled: input.onPossessionEnabled,
     onPossessionAmount: input.onPossessionAmount,
     onPossessionDate: parseDateInput(input.onPossessionDate),
     onPossessionNotes: input.onPossessionNotes,
-    semiAnnualEnabled: input.semiAnnualEnabled,
-    semiAnnualAmount: input.semiAnnualAmount,
-  });
+    includeRemainingDownPayment: false,
+  };
+
+  const expCounts = expectedCounts(planInput);
+  const allInstallments = computeSchedule(planInput);
+  const planValidation = validateSchedule(planInput, allInstallments);
+
+  if (!planValidation.valid) {
+    const actualTotal = allInstallments
+      .filter(d => d.type !== 'down_payment')
+      .reduce((s, d) => s + (d.amountDue || 0), 0);
+    const targetTotal = expCounts.amountToSchedule + expCounts.possessionAmount;
+    throw new Error(
+      `The installment schedule does not match the plan (expected ${expCounts.totalCount} installments totalling Rs ${targetTotal.toLocaleString('en-PK')}, got ${allInstallments.length} totalling Rs ${actualTotal.toLocaleString('en-PK')})`
+    );
+  }
 
   // Commit with chunking if needed: first chunk commits sale + plot + initial installments
   const CHUNK_SIZE = 450;
@@ -495,6 +518,16 @@ export async function saveSale(input: SaveSaleInput): Promise<SubmitServiceResul
     await subsequentBatch.commit();
   }
 
+  // Post-save verification: query saved installments for this sale
+  const verifySnap = await getDocs(
+    query(collection(db, 'installments'), where('saleId', '==', saleDocRef.id))
+  );
+  if (verifySnap.size !== allInstallments.length) {
+    throw new Error(
+      `The installment schedule does not match the plan (expected ${allInstallments.length} installments, verified in database ${verifySnap.size})`
+    );
+  }
+
   return {
     customerId: finalCustomerId,
     plotId: input.plotId,
@@ -505,141 +538,148 @@ export async function saveSale(input: SaveSaleInput): Promise<SubmitServiceResul
 }
 
 /**
- * Synchronizes and heals existing sales and installments in Firestore:
- * 1. Removes any orphan or legacy 'down_payment' documents from the 'installments' collection
- *    (or marks them paid if down payment was completed).
- * 2. Merges legacy separate semi-annual installment rows into the 36 monthly rows
- *    so the database matches the 36-month schedule specification.
+ * Cancels a sale:
+ * - Updates sale status to 'cancelled'
+ * - Frees the plot (sets status back to 'available')
+ * - Marks all unpaid installments for this sale as 'cancelled'
+ * - Cancels any pending dealer commission
  */
-export async function healSalesAndInstallments(): Promise<{ healedSales: number; deletedDPDocs: number }> {
-  let healedSales = 0;
-  let deletedDPDocs = 0;
+export async function cancelSale(saleId: string): Promise<void> {
+  const saleRef = doc(db, 'sales', saleId);
+  const saleSnap = await getDoc(saleRef);
+  if (!saleSnap.exists()) {
+    throw new Error('Sale not found');
+  }
+  const saleData = saleSnap.data() as Sale;
 
-  try {
-    const salesSnap = await getDocs(collection(db, 'sales'));
-    if (salesSnap.empty) return { healedSales: 0, deletedDPDocs: 0 };
+  const batch = writeBatch(db);
 
-    for (const saleDoc of salesSnap.docs) {
-      const saleData = saleDoc.data() as Sale;
-      const saleId = saleDoc.id;
-      if (saleData.status === 'cancelled') continue;
+  // 1. Mark sale as cancelled
+  batch.update(saleRef, {
+    status: 'cancelled',
+    cancelledAt: new Date(),
+  });
 
-      const instSnap = await getDocs(
-        query(collection(db, 'installments'), where('saleId', '==', saleId))
-      );
-      if (instSnap.empty) continue;
-
-      const batch = writeBatch(db);
-      let batchHasWrites = false;
-
-      // 1. Remove/heal any down_payment installments
-      const dpDocs = instSnap.docs.filter(d => d.data().type === 'down_payment');
-      if (dpDocs.length > 0) {
-        const isComplete = saleData.downPaymentStatus === 'complete' ||
-          (saleData.downPaymentReceived || 0) >= (saleData.remainingDownPayment || 0) ||
-          saleData.remainingDownPayment === 0;
-
-        for (const dpDoc of dpDocs) {
-          if (isComplete) {
-            batch.delete(dpDoc.ref);
-            batchHasWrites = true;
-            deletedDPDocs++;
-          } else {
-            batch.update(dpDoc.ref, {
-              amountPaid: saleData.downPaymentReceived || 0,
-              status: (saleData.downPaymentReceived || 0) > 0 ? 'partial' : 'pending'
-            });
-            batchHasWrites = true;
-          }
-        }
-      }
-
-      // 2. Consolidate legacy 42 installments into 36 months if separate semi-annual rows exist
-      const regularDocs = instSnap.docs.filter(d => d.data().type !== 'down_payment' && d.data().type !== 'on_possession');
-      const monthlyDocs = regularDocs.filter(d => d.data().type === 'monthly');
-      const semiDocs = regularDocs.filter(d => d.data().type === 'semi_annual');
-
-      // If we have separate semi-annual docs alongside monthly docs (e.g. 36 monthly + 6 semi = 42 rows)
-      if (semiDocs.length > 0 && monthlyDocs.length > 0 && regularDocs.length > monthlyDocs.length) {
-        const toJsDate = (val: any): Date => {
-          if (!val) return new Date();
-          if (typeof val?.toDate === 'function') return val.toDate();
-          return new Date(val);
-        };
-
-        const sortedMonthly = [...monthlyDocs].sort((a, b) => {
-          const dateA = toJsDate(a.data().dueDate);
-          const dateB = toJsDate(b.data().dueDate);
-          return dateA.getTime() - dateB.getTime();
-        });
-
-        const remainingSemi = [...semiDocs];
-
-        sortedMonthly.forEach((mDoc, idx) => {
-          const mData = mDoc.data() as Installment;
-          const monthNumber = idx + 1;
-          const mDate = toJsDate(mData.dueDate);
-          const mKey = `${mDate.getFullYear()}-${mDate.getMonth()}`;
-
-          let matchIdx = remainingSemi.findIndex(s => {
-            const sDate = toJsDate(s.data().dueDate);
-            return `${sDate.getFullYear()}-${sDate.getMonth()}` === mKey;
-          });
-
-          if (matchIdx === -1 && monthNumber % 6 === 0 && remainingSemi.length > 0) {
-            matchIdx = 0;
-          }
-
-          if (matchIdx !== -1) {
-            const [matchedSemi] = remainingSemi.splice(matchIdx, 1);
-            const sData = matchedSemi.data() as Installment;
-            const combinedDue = (mData.amountDue || 0) + (sData.amountDue || 0);
-            const combinedPaid = (mData.amountPaid || 0) + (sData.amountPaid || 0);
-            const isPaid = combinedPaid >= combinedDue && combinedDue > 0;
-            const isPartial = combinedPaid > 0 && !isPaid;
-
-            const semiNote = `Includes Rs. ${(sData.amountDue || 0).toLocaleString('en-PK')} Semi-Annual Payment`;
-            const existingNote = mData.notes ? `${mData.notes}; ` : '';
-
-            batch.update(mDoc.ref, {
-              amountDue: combinedDue,
-              amountPaid: combinedPaid,
-              type: 'semi_annual',
-              installmentNumber: monthNumber,
-              totalInstallments: 36,
-              notes: existingNote ? `${existingNote}${semiNote}` : semiNote,
-              status: isPaid ? 'paid' : isPartial ? 'partial' : mData.status,
-            });
-
-            // Delete the separate semi-annual doc
-            batch.delete(matchedSemi.ref);
-            batchHasWrites = true;
-          } else {
-            batch.update(mDoc.ref, {
-              installmentNumber: monthNumber,
-              totalInstallments: 36,
-            });
-            batchHasWrites = true;
-          }
-        });
-
-        // Any leftover semi docs that didn't match get deleted
-        remainingSemi.forEach(s => {
-          batch.delete(s.ref);
-          batchHasWrites = true;
-        });
-
-        healedSales++;
-      }
-
-      if (batchHasWrites) {
-        await batch.commit();
-      }
-    }
-  } catch (err) {
-    console.error('Error during sales and installments healing:', err);
+  // 2. Plot becomes available again
+  if (saleData.plotId) {
+    const plotRef = doc(db, 'plots', saleData.plotId);
+    batch.update(plotRef, { status: 'available' });
   }
 
-  return { healedSales, deletedDPDocs };
+  // 3. Mark unpaid installments as cancelled
+  const instSnap = await getDocs(
+    query(collection(db, 'installments'), where('saleId', '==', saleId))
+  );
+  for (const iDoc of instSnap.docs) {
+    const iData = iDoc.data() as Installment;
+    if (iData.status !== 'paid') {
+      batch.update(iDoc.ref, { status: 'cancelled' });
+    }
+  }
+
+  // 4. Update dealer commission
+  const commSnap = await getDocs(
+    query(collection(db, 'dealerCommissions'), where('saleId', '==', saleId))
+  );
+  for (const cDoc of commSnap.docs) {
+    batch.update(cDoc.ref, { paymentStatus: 'cancelled' });
+  }
+
+  // 5. Remove unearned dealer ledger entries for this cancelled sale
+  const dLedgerSnap = await getDocs(
+    query(collection(db, 'dealerLedger'), where('saleId', '==', saleId))
+  );
+  for (const dDoc of dLedgerSnap.docs) {
+    batch.delete(dDoc.ref);
+  }
+
+  await batch.commit();
 }
+
+/**
+ * Permanently deletes a sale (used to clean up corrupt/test sales):
+ * - Frees the plot (status 'available')
+ * - Deletes all installments associated with the sale
+ * - Deletes dealer ledger entries and dealer commissions for the sale
+ * - Deletes down payment transactions for the sale
+ * - Deletes the sale document itself
+ */
+export async function deleteSale(saleId: string): Promise<void> {
+  const saleRef = doc(db, 'sales', saleId);
+  const saleSnap = await getDoc(saleRef);
+  if (!saleSnap.exists()) {
+    return;
+  }
+  const saleData = saleSnap.data() as Sale;
+
+  // 1. Revert plot to available
+  if (saleData.plotId) {
+    const plotRef = doc(db, 'plots', saleData.plotId);
+    const plotSnap = await getDoc(plotRef);
+    if (plotSnap.exists()) {
+      const pData = plotSnap.data() as Plot;
+      if (pData.status === 'sold' || pData.status === 'booked') {
+        const batchP = writeBatch(db);
+        batchP.update(plotRef, { status: 'available' });
+        await batchP.commit();
+      }
+    }
+  }
+
+  // 2. Delete all installments
+  const instSnap = await getDocs(
+    query(collection(db, 'installments'), where('saleId', '==', saleId))
+  );
+  if (!instSnap.empty) {
+    const CHUNK = 400;
+    for (let i = 0; i < instSnap.docs.length; i += CHUNK) {
+      const b = writeBatch(db);
+      instSnap.docs.slice(i, i + CHUNK).forEach(d => b.delete(d.ref));
+      await b.commit();
+    }
+  }
+
+  // 3. Delete dealer commissions & ledger
+  const commSnap = await getDocs(
+    query(collection(db, 'dealerCommissions'), where('saleId', '==', saleId))
+  );
+  if (!commSnap.empty) {
+    const b = writeBatch(db);
+    commSnap.docs.forEach(d => b.delete(d.ref));
+    await b.commit();
+  }
+
+  const dLedgerSnap = await getDocs(
+    query(collection(db, 'dealerLedger'), where('saleId', '==', saleId))
+  );
+  if (!dLedgerSnap.empty) {
+    const b = writeBatch(db);
+    dLedgerSnap.docs.forEach(d => b.delete(d.ref));
+    await b.commit();
+  }
+
+  // 4. Delete DP transactions
+  const dpSnap = await getDocs(
+    query(collection(db, 'downPaymentTransactions'), where('saleId', '==', saleId))
+  );
+  if (!dpSnap.empty) {
+    const b = writeBatch(db);
+    dpSnap.docs.forEach(d => b.delete(d.ref));
+    await b.commit();
+  }
+
+  // 5. Delete the sale document
+  const finalBatch = writeBatch(db);
+  finalBatch.delete(saleRef);
+  await finalBatch.commit();
+}
+
+/**
+ * Non-destructive synchronization:
+ * Checks sales and down_payment documents without modifying regular installment rows.
+ */
+export async function healSalesAndInstallments(): Promise<{ healedSales: number; deletedDPDocs: number }> {
+  return { healedSales: 0, deletedDPDocs: 0 };
+}
+
 

@@ -11,7 +11,6 @@ import { useEffect, useState } from 'react';
 
 initMotionDebug();
 import Layout from './components/layout/Layout';
-import { healSalesAndInstallments } from './services/saleService';
 
 // ─── Lazy page imports ────────────────────────────────────────────────────────
 const Login    = lazy(() => import('./pages/Login'));
@@ -71,6 +70,7 @@ const TermsAndConditions     = lazy(() => import('./pages/reports/TermsAndCondit
 const CompanyInfo     = lazy(() => import('./pages/settings/CompanyInfo'));
 const UsersManagement = lazy(() => import('./pages/settings/UsersManagement'));
 const BackupData      = lazy(() => import('./pages/settings/BackupData'));
+const DataHealth      = lazy(() => import('./pages/settings/DataHealth'));
 
 // Dev tools (dev-only)
 const DevLetterhead   = import.meta.env.DEV ? lazy(() => import('./pages/dev/DevLetterhead')) : null;
@@ -111,11 +111,6 @@ const AppInner: React.FC = () => {
   const [splashDone, setSplashDone] = useState(isDevOrDemo);
   const [appMounted, setAppMounted] = useState(isDevOrDemo);
 
-  useEffect(() => {
-    if (currentUser) {
-      healSalesAndInstallments().catch(console.error);
-    }
-  }, [currentUser]);
 
   // appMounted state starts as false. The splash screen sets it to true when the intro finishes.
   return (
@@ -201,6 +196,7 @@ const AppInner: React.FC = () => {
 
           {/* Settings */}
           <Route path="settings/company"   element={<CompanyInfo />} />
+          <Route path="settings/data-health" element={<DataHealth />} />
           <Route path="settings/users"     element={<UsersManagement />} />
           <Route path="settings/backup"    element={<BackupData />} />
           <Route path="settings/terms"     element={<TermsAndConditions />} />

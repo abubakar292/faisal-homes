@@ -192,161 +192,39 @@ export interface BuildInstallmentsParams {
   semiAnnualAmount?: number;
 }
 
-export function sortInstallments<T extends { dueDate: Date | string; type?: string }>(list: T[]): T[] {
-  const typeRank = (type?: string) => {
-    if (type === 'down_payment') return 0;
-    if (type === 'monthly') return 1;
-    if (type === 'semi_annual') return 2;
-    if (type === 'on_possession') return 3;
-    return 4;
-  };
-  return [...list].sort((a, b) => {
-    const timeA = new Date(a.dueDate).getTime();
-    const timeB = new Date(b.dueDate).getTime();
-    if (timeA !== timeB) return timeA - timeB;
-    return typeRank(a.type) - typeRank(b.type);
-  });
+import {
+  computeSchedule,
+  sortScheduleDocuments,
+  normalizeRows as normalizeDomainRows,
+  expectedCounts,
+} from '../domain/plan';
+
+export function sortInstallments<T extends { dueDate: Date | string; type?: string; installmentNumber?: number }>(
+  list: T[]
+): T[] {
+  return sortScheduleDocuments(list);
 }
 
 export function buildInstallments(
   params: BuildInstallmentsParams
 ): Omit<Installment, 'id'>[] {
-  const {
-    saleId,
-    customerId,
-    plotId,
-    saleDate,
-    rows,
-    remainingDownPayment,
-    includeRemainingDownPayment = false,
-    onPossessionEnabled = false,
-    onPossessionAmount = 0,
-    onPossessionDate,
-    onPossessionNotes = '',
-    semiAnnualEnabled = false,
-    semiAnnualAmount = 0,
-  } = params;
-
-  const allInsts: Omit<Installment, 'id'>[] = [];
-  const totalMonths = rows.reduce((s, r) => s + (r.months || 0), 0);
-  const regularCount = rows.reduce((s, r) => s + getRowCount(r), 0);
-  let instNum = 1;
-
-  // 1. Regular monthly installments: one per interval inside each row
-  let offset = 0;
-  for (const row of rows) {
-    const interval = getRowInterval(row);
-    const count = getRowCount(row);
-    const frequency = INTERVAL_FREQUENCY[interval] || `Every ${interval} months`;
-    for (let k = 1; k <= count; k++) {
-      const isLast = k === count;
-      const baseMonthlyAmount = isLast
-        ? row.monthlyAmount + (row.totalAmount - row.monthlyAmount * count)
-        : row.monthlyAmount;
-
-      const monthIndex = offset + k * interval;
-
-      allInsts.push({
-        receiptNumber: '',
-        saleId,
-        customerId,
-        plotId,
-        installmentNumber: instNum++,
-        totalInstallments: regularCount,
-        type: 'monthly',
-        frequency,
-        dueDate: addMonths(saleDate, monthIndex),
-        amountDue: baseMonthlyAmount,
-        amountPaid: 0,
-        paymentDate: null,
-        paymentMethod: '',
-        bankName: '',
-        chequeNumber: '',
-        status: 'pending',
-        notes: '',
-        createdAt: new Date(),
-      });
-    }
-    offset += row.months;
-  }
-
-  // 2. Separate semi-annual installments: due on month 6, 12, 18, 24, 30, 36...
-  if (semiAnnualEnabled && semiAnnualAmount > 0) {
-    const semiCount = Math.floor(totalMonths / 6);
-    for (let s = 1; s <= semiCount; s++) {
-      const monthIndex = s * 6;
-      allInsts.push({
-        receiptNumber: '',
-        saleId,
-        customerId,
-        plotId,
-        installmentNumber: s,
-        totalInstallments: semiCount,
-        type: 'semi_annual',
-        frequency: 'Semi-Annual',
-        dueDate: addMonths(saleDate, monthIndex),
-        amountDue: semiAnnualAmount,
-        amountPaid: 0,
-        paymentDate: null,
-        paymentMethod: '',
-        bankName: '',
-        chequeNumber: '',
-        status: 'pending',
-        notes: `Semi-Annual ${s} of ${semiCount}`,
-        createdAt: new Date(),
-      });
-    }
-  }
-
-  // 3. On Possession (if enabled)
-  if (onPossessionEnabled && onPossessionAmount > 0) {
-    allInsts.push({
-      receiptNumber: '',
-      saleId,
-      customerId,
-      plotId,
-      installmentNumber: 1,
-      totalInstallments: 1,
-      type: 'on_possession',
-      frequency: 'On Possession',
-      dueDate: onPossessionDate || addMonths(saleDate, totalMonths),
-      amountDue: onPossessionAmount,
-      amountPaid: 0,
-      paymentDate: null,
-      paymentMethod: '',
-      bankName: '',
-      chequeNumber: '',
-      status: 'pending',
-      notes: onPossessionNotes || 'On Possession Payment',
-      createdAt: new Date(),
-    });
-  }
-
-  // 4. Down Payment row (if explicitly included)
-  if (includeRemainingDownPayment && remainingDownPayment > 0) {
-    allInsts.push({
-      receiptNumber: '',
-      saleId,
-      customerId,
-      plotId,
-      installmentNumber: 0,
-      totalInstallments: 1,
-      type: 'down_payment',
-      frequency: 'Down Payment',
-      dueDate: new Date(saleDate),
-      amountDue: remainingDownPayment,
-      amountPaid: 0,
-      paymentDate: null,
-      paymentMethod: '',
-      bankName: '',
-      chequeNumber: '',
-      status: 'pending',
-      notes: 'Remaining Down Payment',
-      createdAt: new Date(),
-    });
-  }
-
-  return sortInstallments(allInsts);
+  return computeSchedule({
+    saleId: params.saleId,
+    customerId: params.customerId,
+    plotId: params.plotId,
+    saleDate: params.saleDate,
+    totalPrice: 0,
+    downPaymentAmount: 0,
+    rows: params.rows,
+    remainingDownPayment: params.remainingDownPayment,
+    includeRemainingDownPayment: params.includeRemainingDownPayment,
+    onPossessionEnabled: params.onPossessionEnabled,
+    onPossessionAmount: params.onPossessionAmount,
+    onPossessionDate: params.onPossessionDate,
+    onPossessionNotes: params.onPossessionNotes,
+    semiAnnualEnabled: params.semiAnnualEnabled,
+    semiAnnualAmount: params.semiAnnualAmount,
+  });
 }
 
 /**

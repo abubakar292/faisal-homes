@@ -397,7 +397,13 @@ export const buildCustomerStatement = (
 
   return {
     saleBlocks,
-    rows: rows.sort((a, b) => (a.dueDate?.getTime() || 0) - (b.dueDate?.getTime() || 0)),
+    rows: rows.sort((a, b) => {
+      const diff = (a.dueDate?.getTime() || 0) - (b.dueDate?.getTime() || 0);
+      if (diff !== 0) return diff;
+      if (a.type === 'monthly' && b.type !== 'monthly') return -1;
+      if (b.type === 'monthly' && a.type !== 'monthly') return 1;
+      return 0;
+    }),
     kpis: {
       overdueCount,
       overdueAmount,

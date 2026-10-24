@@ -13,6 +13,7 @@ import {
   CreditCard, TrendingDown, DollarSign, User, ShieldAlert, CheckCircle, Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { expectedCounts, PlanInput } from '../../domain/plan';
 import type { Customer, Sale, Plot, Installment, DownPaymentTransaction, CompanySettings } from '../../types';
 
 // Simple useCountUp hook if it doesn't exist
@@ -161,6 +162,45 @@ const CustomerLedger: React.FC = () => {
 
   const displayRows = st.rows.filter(r => statusFilter === 'all' || r.status === statusFilter);
 
+  const incompleteSales = useMemo(() => {
+    return activeSales.map(sale => {
+      const saleInsts = installments.filter(
+        i => i.saleId === sale.id && i.type !== 'down_payment'
+      );
+      const rows = Array.isArray(sale.installmentRows) && sale.installmentRows.length > 0
+        ? sale.installmentRows
+        : [];
+      const planInput: PlanInput = {
+        saleId: sale.id,
+        customerId: sale.customerId,
+        plotId: sale.plotId,
+        saleDate: sale.saleDate || new Date(),
+        totalPrice: sale.totalPrice || sale.finalPrice || 0,
+        discount: sale.discount || 0,
+        bookingPaid: sale.bookingAmountPaid || 0,
+        downPaymentAmount: sale.downPaymentAmount || sale.downPayment || 0,
+        rows,
+        semiAnnualEnabled: !!sale.semiAnnualEnabled,
+        semiAnnualAmount: sale.semiAnnualAmount || 0,
+        onPossessionEnabled: !!sale.onPossessionEnabled,
+        onPossessionAmount: sale.onPossessionAmount || 0,
+        includeRemainingDownPayment: false,
+      };
+      const exp = expectedCounts(planInput);
+      const expectedTotal = exp.amountToSchedule + exp.possessionAmount;
+      const actualTotal = saleInsts.reduce((sum, i) => sum + (i.amountDue || 0), 0);
+      const isIncomplete = saleInsts.length !== exp.totalCount || Math.abs(actualTotal - expectedTotal) > 1;
+      return {
+        sale,
+        isIncomplete,
+        expectedCount: exp.totalCount,
+        actualCount: saleInsts.length,
+        expectedTotal,
+        actualTotal,
+      };
+    }).filter(item => item.isIncomplete && (scope === 'all' || item.sale.id === scope));
+  }, [activeSales, installments, scope]);
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex items-center gap-4">
@@ -176,6 +216,37 @@ const CustomerLedger: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Red Banner for Incomplete Schedules */}
+      {incompleteSales.length > 0 && (
+        <div className="space-y-2">
+          {incompleteSales.map(({ sale, actualTotal, expectedTotal, actualCount, expectedCount }) => (
+            <div
+              key={sale.id}
+              className="p-4 rounded-xl bg-red-600 text-white font-semibold flex items-center justify-between gap-3 shadow-md"
+            >
+              <div className="flex items-center gap-3">
+                <ShieldAlert size={24} className="flex-shrink-0 text-white" />
+                <div>
+                  <p className="text-sm font-bold tracking-wide">
+                    Schedule incomplete: scheduled Rs {actualTotal.toLocaleString('en-PK')} of Rs {expectedTotal.toLocaleString('en-PK')}
+                  </p>
+                  <p className="text-xs text-red-100 font-normal mt-0.5">
+                    Sale {sale.saleNumber || sale.id.slice(0, 8)}: database contains {actualCount} installments (expected {expectedCount}).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/settings/data-health')}
+                className="px-3 py-1.5 rounded-lg bg-white text-red-700 text-xs font-bold hover:bg-red-50 flex-shrink-0 transition-colors shadow-sm"
+              >
+                Data Health
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 2. Customer Header Card */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card border-0 rounded-2xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #1a3c6e 0%, #102a52 100%)' }}>

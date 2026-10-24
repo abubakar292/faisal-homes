@@ -78,6 +78,12 @@ import {
   saveSale,
   SubmitServiceResult,
 } from '../../services/saleService';
+import {
+  expectedCounts,
+  computeSchedule,
+  validateSchedule,
+  PlanInput,
+} from '../../domain/plan';
 
 import SectionNav, { SectionNavItem, SectionStatus } from '../../components/sale/SectionNav';
 import SectionCard from '../../components/sale/SectionCard';
@@ -700,8 +706,36 @@ export const NewSale: React.FC = () => {
 
   const planValid = useMemo(() => {
     if (isBookingMode) return true;
-    return planMath.planValid && !planMath.hasMisalignedRow && rows.length > 0;
-  }, [isBookingMode, planMath, rows]);
+    if (rows.length === 0) return false;
+    const planInputData: PlanInput = {
+      saleDate: new Date(),
+      totalPrice: numTotalPrice,
+      discount: numDiscount,
+      bookingPaid: numBookingAmount,
+      downPaymentAmount: numDownPaymentAmount,
+      rows,
+      semiAnnualEnabled,
+      semiAnnualAmount: Number(semiAnnualAmount) || 0,
+      onPossessionEnabled,
+      onPossessionAmount: Number(onPossessionAmount) || 0,
+      includeRemainingDownPayment: false,
+    };
+    const expectedSchedule = computeSchedule(planInputData);
+    const scheduleValidation = validateSchedule(planInputData, expectedSchedule);
+    return scheduleValidation.valid && !planMath.hasMisalignedRow;
+  }, [
+    isBookingMode,
+    rows,
+    numTotalPrice,
+    numDiscount,
+    numBookingAmount,
+    numDownPaymentAmount,
+    semiAnnualEnabled,
+    semiAnnualAmount,
+    onPossessionEnabled,
+    onPossessionAmount,
+    planMath.hasMisalignedRow,
+  ]);
 
   const dealerValid = useMemo(() => {
     if (isBookingMode || dealerMode === 'none') return true;
@@ -941,11 +975,37 @@ export const NewSale: React.FC = () => {
       }
     }
 
-    if (!planMath.planValid) {
-      errs.rows = 'Installment plan must balance with required amount';
-    }
-    if (planMath.hasMisalignedRow) {
-      errs.rows = 'One or more rows have misaligned months and interval';
+    const planInputData: PlanInput = {
+      saleDate: new Date(),
+      totalPrice: numTotalPrice,
+      discount: numDiscount,
+      bookingPaid: numBookingAmount,
+      downPaymentAmount: numDownPaymentAmount,
+      rows,
+      semiAnnualEnabled,
+      semiAnnualAmount: Number(semiAnnualAmount) || 0,
+      onPossessionEnabled,
+      onPossessionAmount: Number(onPossessionAmount) || 0,
+      onPossessionDate: parseDateInput(onPossessionDate),
+      onPossessionNotes,
+      includeRemainingDownPayment: false,
+    };
+
+    const expCounts = expectedCounts(planInputData);
+    const expectedSchedule = computeSchedule(planInputData);
+    const scheduleValidation = validateSchedule(planInputData, expectedSchedule);
+
+    if (!scheduleValidation.valid) {
+      const actualTotal = expectedSchedule
+        .filter(d => d.type !== 'down_payment')
+        .reduce((s, d) => s + (d.amountDue || 0), 0);
+      const targetTotal = expCounts.amountToSchedule + expCounts.possessionAmount;
+      const mismatchMessage = `The installment schedule does not match the plan (expected ${expCounts.totalCount} installments totalling Rs ${targetTotal.toLocaleString('en-PK')}, got ${expectedSchedule.length} totalling Rs ${actualTotal.toLocaleString('en-PK')})`;
+      errs.rows = mismatchMessage;
+      setFieldErrors(errs);
+      toast.error(mismatchMessage);
+      scrollToSection('section-plan');
+      return;
     }
 
     if (dealerMode === 'existing' && !selectedDealerId) {
