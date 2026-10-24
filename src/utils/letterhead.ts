@@ -52,6 +52,7 @@ export interface BuildLetterheadOptions {
   sections?: LetterheadSection[];
   repeatFooter?: boolean;
   fitOnePage?: boolean;
+  pageHeightMm?: number;
   receipt?: {
     title: string;
     data: ReceiptItem;
@@ -965,6 +966,10 @@ export function buildLetterheadDocument(options: BuildLetterheadOptions): string
   <title>${section0.title || 'Document'}</title>
   <style>
 ${LETTERHEAD_CSS}
+${options.pageHeightMm ? `
+  @page { size: 210mm ${options.pageHeightMm}mm !important; margin: 0 !important; }
+  html, body, .lh-page-origin, table.lh-doc { min-height: ${options.pageHeightMm}mm !important; }
+` : ''}
   </style>
 </head>
 <body class="lh-doc">
