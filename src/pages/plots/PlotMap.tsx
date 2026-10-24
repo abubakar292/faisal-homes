@@ -15,6 +15,7 @@ import {
   paletteFor,
   useSoldCelebrations,
 } from '../../features/plotHouses';
+import { PLOT_MAP_TOKENS } from '../../utils/contrast';
 
 interface PlotDetails {
   loading: boolean;
@@ -145,10 +146,11 @@ const PlotMap: React.FC = () => {
   }, {} as Record<string, Plot[]>);
 
   const legend = [
-    { status: 'available', label: 'Available', boxClass: 'bg-white border-slate-300' },
-    { status: 'booked', label: 'Booked', boxClass: 'bg-[#fffbf0] border-amber-300' },
-    { status: 'sold', label: 'Sold', boxClass: 'bg-[#edf7ed] border-[#86efac]' },
-    { status: 'cancelled', label: 'Cancelled', boxClass: 'bg-red-50 border-red-200' },
+    { status: 'available', label: 'Available', token: PLOT_MAP_TOKENS.available },
+    { status: 'booked', label: 'Booked', token: PLOT_MAP_TOKENS.booked },
+    { status: 'sold', label: 'Sold', token: PLOT_MAP_TOKENS.sold },
+    { status: 'reserved', label: 'Reserved', token: PLOT_MAP_TOKENS.reserved },
+    { status: 'cancelled', label: 'Cancelled', token: PLOT_MAP_TOKENS.cancelled },
   ];
 
   return (
@@ -164,8 +166,17 @@ const PlotMap: React.FC = () => {
         <div className="flex items-center gap-3 flex-wrap">
           {legend.map((l) => (
             <div key={l.status} className="flex items-center gap-1.5">
-              <div className={`w-4 h-4 rounded ${l.boxClass} border`} />
-              <span className="text-xs text-slate-600">{l.label}</span>
+              <div
+                className="w-4 h-4 rounded"
+                style={{
+                  backgroundColor: l.token.fill,
+                  borderColor: l.token.border,
+                  borderWidth: '1.5px',
+                  borderStyle: 'solid',
+                  boxShadow: '0 1px 2px rgba(15,23,42,.10)',
+                }}
+              />
+              <span className="text-xs text-slate-700 font-medium">{l.label}</span>
             </div>
           ))}
         </div>
@@ -217,7 +228,7 @@ const PlotMap: React.FC = () => {
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="">All Status</option>
-            {['available', 'booked', 'sold', 'cancelled'].map((s) => (
+            {['available', 'booked', 'sold', 'reserved', 'cancelled'].map((s) => (
               <option key={s} value={s}>
                 {s.charAt(0).toUpperCase() + s.slice(1)}
               </option>
@@ -251,14 +262,14 @@ const PlotMap: React.FC = () => {
             .map(([block, blockPlots]) => (
               <div
                 key={block}
-                className="card mb-4 relative"
+                className="card mb-4 relative bg-[#f1f5f9] border border-slate-200/90 shadow-xs"
                 style={blockPlots.length > 400 ? { contentVisibility: 'auto' } : undefined}
               >
                 <div className="flex items-baseline justify-between mb-3">
                   <h3 className="font-semibold text-slate-700 text-sm sm:text-base">
                     Block {block}
                   </h3>
-                  <span className="text-[11px] text-slate-400 hidden sm:inline">
+                  <span className="text-[11px] text-slate-500 hidden sm:inline">
                     Sold plots show a bungalow. Tap a plot for details.
                   </span>
                 </div>
@@ -272,21 +283,22 @@ const PlotMap: React.FC = () => {
                     .map((plot) => {
                       const isSold = plot.status === 'sold';
                       const isBooked = plot.status === 'booked';
-                      const isAvailable = plot.status === 'available';
                       const isCelebrating = celebratingPlotIds.includes(plot.id);
+                      const isSelected = selected?.id === plot.id;
 
                       const variant = sizeToVariant(plot.size, plot.sizeUnit);
                       const palette = paletteFor(plot.id);
 
-                      // Style tile based on status
-                      let tileClass = 'bg-slate-50 border-slate-200 text-slate-600';
-                      if (isSold) {
-                        tileClass = 'bg-[#edf7ed] border-[#86efac] text-slate-800 shadow-2xs';
-                      } else if (isBooked) {
-                        tileClass = 'bg-[#fffbf0] border-amber-300 text-amber-900 shadow-2xs';
-                      } else if (isAvailable) {
-                        tileClass = 'bg-white border-slate-200/90 text-slate-700 shadow-2xs';
-                      }
+                      const token =
+                        plot.status === 'sold'
+                          ? PLOT_MAP_TOKENS.sold
+                          : plot.status === 'booked'
+                          ? PLOT_MAP_TOKENS.booked
+                          : plot.status === 'reserved'
+                          ? PLOT_MAP_TOKENS.reserved
+                          : plot.status === 'cancelled'
+                          ? PLOT_MAP_TOKENS.cancelled
+                          : PLOT_MAP_TOKENS.available;
 
                       return (
                         <button
@@ -297,7 +309,18 @@ const PlotMap: React.FC = () => {
                           }}
                           onClick={() => setSelected(plot)}
                           aria-label={`Plot ${plot.plotNumber}, ${plot.size} ${plot.sizeUnit}, ${plot.status}`}
-                          className={`relative overflow-hidden rounded-[10px] border transition-all cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1a3c6e] hover:shadow-md hover:border-slate-400 ${tileClass} h-[80px] min-w-[70px] sm:h-[88px] sm:min-w-[104px] flex-shrink-0`}
+                          className={`relative overflow-hidden rounded-[10px] transition-all cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1a3c6e] focus-visible:ring-offset-2 hover:-translate-y-[1px] hover:shadow-md ${
+                            isSelected ? 'ring-2 ring-[#1a3c6e] ring-offset-2 z-20 -translate-y-[1px]' : ''
+                          } h-[80px] min-w-[70px] sm:h-[88px] sm:min-w-[104px] flex-shrink-0`}
+                          style={{
+                            backgroundColor: token.fill,
+                            borderColor: token.border,
+                            borderWidth: '1.5px',
+                            borderStyle: 'solid',
+                            boxShadow: isSelected
+                              ? '0 4px 6px -1px rgba(15,23,42,.15)'
+                              : '0 1px 2px rgba(15,23,42,.10)',
+                          }}
                         >
                           {/* Top-left label: Plot Number white pill */}
                           <div className="absolute top-1.5 left-1.5 z-10 bg-white/95 backdrop-blur-[2px] px-1.5 py-0.5 rounded shadow-2xs border border-slate-200/60 font-bold text-[11px] text-slate-800 leading-none select-none flex items-center gap-1">
