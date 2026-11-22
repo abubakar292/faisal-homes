@@ -8,7 +8,12 @@ let clientPromise = null;
 export function getSupabase() {
   if (!clientPromise) {
     clientPromise = fetch('/api/public/config')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Cannot reach the FAISAL HOMES server.'))))
+      .then(async (r) => {
+        if (r.ok) return r.json();
+        // Include the status / Vercel error code so a setup problem can be identified from a screenshot.
+        const why = r.headers.get('x-vercel-error') || (await r.json().catch(() => null))?.code || '';
+        throw new Error(`Cannot reach the FAISAL HOMES server (HTTP ${r.status}${why ? ` ${why}` : ''}).`);
+      })
       .then((cfg) => {
         if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) throw new Error('Supabase is not configured on the server (SUPABASE_URL / SUPABASE_ANON_KEY).');
         return createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
