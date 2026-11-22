@@ -1,7 +1,7 @@
 'use strict';
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, stopServer } = require('./helpers');
+const { startServer, stopServer, ANON_KEY } = require('./helpers');
 const { generateSchedule } = require('../src/lib/schedule');
 const { addMonths, today, addDays } = require('../src/lib/dates');
 const { amountInWords } = require('../src/lib/words');
@@ -12,9 +12,10 @@ const T = today();
 const ids = {};
 const ok = (r, code = 200) => { assert.equal(r.status, code, JSON.stringify(r.data).slice(0, 400)); return r.data; };
 const money = (v) => Math.round(Number(v) * 100);
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
 before(async () => { ctx = await startServer(); admin = ctx.api(); acct = ctx.api(); sales = ctx.api(); viewer = ctx.api(); });
-after(async () => { await stopServer(ctx.server); });
+after(async () => { await stopServer(ctx); });
 
 describe('pure helpers', () => {
   it('adds months without drifting past month end', () => {
@@ -50,37 +51,83 @@ describe('pure helpers', () => {
 });
 
 describe('setup, login and security', () => {
-  it('creates the first admin only once', async () => {
+  it('creates the first admin (Supabase login + user) only once', async () => {
     assert.equal(ok(await admin.get('/auth/setup-status')).needsSetup, true);
-    ok(await admin.post('/auth/setup', { username: 'admin', full_name: 'Faisal Admin', password: 'Admin@12345' }));
-    assert.equal((await ctx.api().post('/auth/setup', { username: 'x', full_name: 'X', password: 'xxxxxxxx' })).status, 409);
+    assert.equal((await admin.post('/auth/setup', { email: 'not-an-email', full_name: 'X', password: 'Admin@12345' })).status, 400);
+    ok(await admin.post('/auth/setup', { email: 'Admin@FH.test', full_name: 'Faisal Admin', password: 'Admin@12345' }), 201);
+    assert.equal((await ctx.api().post('/auth/setup', { email: 'x@fh.test', full_name: 'X', password: 'xxxxxxxx' })).status, 409);
+    assert.equal(ctx.fake.users.size, 1, 'the refused setup created no Supabase login');
+    const me = ok(await admin.login('admin@fh.test', 'Admin@12345'));
+    assert.equal(me.user.role, 'ADMIN');
+    assert.equal(me.user.email, 'admin@fh.test');
+    assert.ok(ok(await admin.get('/audit?action=LOGIN')).length >= 1);
   });
   it('blocks requests without the CSRF header', async () => {
     const r = await admin.req('POST', '/customers', { full_name: 'X' }, { csrf: false });
     assert.equal(r.status, 403);
   });
-  it('rejects wrong passwords and locks after 5 failures', async () => {
-    const a = ctx.api();
-    for (let i = 0; i < 5; i++) assert.equal((await a.post('/auth/login', { username: 'locktest', password: 'wrong' })).status, 401);
-    assert.equal((await a.post('/auth/login', { username: 'locktest', password: 'wrong' })).status, 429);
+  it('refuses wrong passwords, forged or expired tokens, and logins without a FAISAL HOMES user', async () => {
+    assert.equal((await ctx.api().login('admin@fh.test', 'wrong')).status, 400);
+    const anon = ctx.api();
+    assert.equal((await anon.get('/customers')).status, 401);
+    anon.token = 'not.a.token';
+    assert.equal((await anon.get('/customers')).status, 401);
+    const adminLogin = [...ctx.fake.users.values()][0];
+    anon.token = ctx.fake.forgeToken(adminLogin.id);
+    assert.equal((await anon.get('/customers')).status, 401, 'token signed with an unknown key');
+    anon.token = ctx.fake.issueToken(adminLogin, { expiresIn: -120 });
+    const expired = await anon.get('/customers');
+    assert.equal(expired.status, 401);
+    assert.equal(expired.data.code, 'SESSION_EXPIRED');
+    // a Supabase login made outside FAISAL HOMES (e.g. a public sign-up) gets no access
+    ctx.fake.addUser('stranger@example.com', 'Passw0rd!');
+    const s = ctx.api();
+    const r = await s.login('stranger@example.com', 'Passw0rd!');
+    assert.equal(r.status, 403);
+    assert.equal(r.data.code, 'NO_PROFILE');
+    assert.equal((await s.get('/customers')).status, 403);
   });
-  it('creates role users and enforces permissions', async () => {
+  it('creates role users with Supabase logins and enforces permissions', async () => {
     for (const [u, role] of [['acct', 'ACCOUNTANT'], ['sales', 'SALES'], ['viewer', 'VIEWER']]) {
-      ok(await admin.post('/users', { username: u, full_name: `${role} User`, role, password: 'Passw0rd!' }), 201);
+      ok(await admin.post('/users', { email: `${u}@fh.test`, full_name: `${role} User`, role, password: 'Passw0rd!' }), 201);
     }
-    ok(await acct.post('/auth/login', { username: 'acct', password: 'Passw0rd!' }));
-    ok(await sales.post('/auth/login', { username: 'sales', password: 'Passw0rd!' }));
-    const me = ok(await viewer.post('/auth/login', { username: 'viewer', password: 'Passw0rd!' }));
+    assert.equal((await admin.post('/users', { email: 'ACCT@fh.test', full_name: 'Dup', role: 'SALES', password: 'Passw0rd!' })).status, 409);
+    assert.equal((await admin.post('/users', { email: 'short@fh.test', full_name: 'Short', role: 'SALES', password: 'short' })).status, 400);
+    ok(await acct.login('acct@fh.test', 'Passw0rd!'));
+    ok(await sales.login('sales@fh.test', 'Passw0rd!'));
+    const me = ok(await viewer.login('viewer@fh.test', 'Passw0rd!'));
     assert.ok(!me.permissions.includes('customer.edit'));
     assert.equal((await viewer.post('/customers', { full_name: 'X', cnic: '1234512345671' })).status, 403);
     assert.equal((await sales.get('/expenses')).status, 403);
     assert.equal((await acct.get('/users')).status, 403);
+    assert.equal((await acct.post('/users', { email: 'x@fh.test', full_name: 'X', role: 'ADMIN', password: 'Passw0rd!' })).status, 403);
     assert.equal((await sales.get('/reports/summary')).status, 403);
+  });
+  it('disables and re-enables users, and changes passwords through Supabase', async () => {
+    const v = ok(await admin.get('/users')).find((u) => u.email === 'viewer@fh.test');
+    ok(await admin.put(`/users/${v.id}`, { full_name: v.full_name, role: 'VIEWER', is_active: false }));
+    const blocked = await viewer.get('/customers');
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.data.code, 'DISABLED');
+    assert.equal((await ctx.api().login('viewer@fh.test', 'Passw0rd!')).status, 400, 'also blocked in Supabase Auth');
+    ok(await admin.put(`/users/${v.id}`, { full_name: v.full_name, role: 'VIEWER', is_active: true }));
+    ok(await viewer.get('/customers'));
+    assert.equal((await viewer.post('/auth/change-password', { current_password: 'wrong', new_password: 'NewPassw0rd!' })).status, 400);
+    ok(await viewer.post('/auth/change-password', { current_password: 'Passw0rd!', new_password: 'NewPassw0rd!' }));
+    assert.equal((await ctx.api().login('viewer@fh.test', 'Passw0rd!')).status, 400);
+    ok(await viewer.login('viewer@fh.test', 'NewPassw0rd!'));
+    // admin reset with "must change password": only the password screen works until it is changed
+    ok(await admin.post(`/users/${v.id}/reset-password`, { password: 'Temp1234!', must_change_password: true }));
+    ok(await viewer.login('viewer@fh.test', 'Temp1234!'));
+    assert.equal((await viewer.get('/customers')).data.code, 'MUST_CHANGE_PASSWORD');
+    ok(await viewer.post('/auth/change-password', { current_password: 'Temp1234!', new_password: 'Passw0rd!' }));
+    ok(await viewer.get('/customers'));
   });
   it('cannot remove the last administrator', async () => {
     const users = ok(await admin.get('/users'));
-    const a = users.find((u) => u.username === 'admin');
+    const a = users.find((u) => u.email === 'admin@fh.test');
     assert.equal((await admin.put(`/users/${a.id}`, { full_name: 'A', role: 'VIEWER', is_active: true })).status, 400);
+    assert.equal((await admin.put(`/users/${a.id}`, { full_name: 'A', role: 'ADMIN', is_active: false })).status, 400);
   });
 });
 
@@ -346,13 +393,11 @@ describe('cancellation and refunds', () => {
 describe('expenses and financial reports', () => {
   it('records and cancels expenses through the ledger', async () => {
     const cats = ok(await acct.get('/expenses/categories'));
-    const landCat = cats.find((c) => c.name === 'Land Purchase');
     const dev = cats.find((c) => c.name === 'Development');
     const mkt = cats.find((c) => c.name === 'Marketing');
-    assert.equal((await acct.post('/expenses', { expense_date: T, category_id: landCat.id, description: 'Seller payment', amount: 1000000, method: 'CASH' })).status, 400);
-    // "Land Purchase" category is retired by the land upgrade: owner payments go through Pay Land Owner with a payment source.
-    assert.equal(landCat.is_active, false);
-    assert.equal((await acct.post('/expenses', { expense_date: T, category_id: landCat.id, description: 'Seller payment 1', amount: 3000000, method: 'BANK_TRANSFER', land_id: ids.land })).status, 400);
+    // Payments to land owners are not an expense category: they go through Pay Land Owner with a payment source.
+    assert.ok(!cats.some((c) => c.cost_type === 'LAND_PAYMENT'));
+    assert.equal((await admin.post('/settings/expense-categories', { name: 'Land Purchase', cost_type: 'LAND_PAYMENT' })).status, 400);
     ok(await acct.post(`/lands/${ids.land}/payments`, { amount: 3000000, payment_date: T, method: 'BANK_TRANSFER', sources: [{ type: 'PERSONAL_NEW', amount: 3000000, investor_name: 'Owner' }] }), 201);
     ok(await acct.post('/expenses', { expense_date: T, category_id: dev.id, description: 'Road levelling', amount: 2100000, method: 'CASH', paid_to: 'Contractor' }), 201);
     const m = ok(await acct.post('/expenses', { expense_date: T, category_id: mkt.id, description: 'Facebook ads', amount: 50000, method: 'CASH' }), 201);
@@ -412,58 +457,82 @@ describe('expenses and financial reports', () => {
   });
 });
 
-describe('documents', () => {
-  it('uploads, protects and soft-deletes documents', async () => {
-    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-    const fd = new FormData();
-    fd.append('entity_type', 'CUSTOMER'); fd.append('entity_id', String(ids.c1)); fd.append('doc_type', 'CNIC_FRONT');
-    fd.append('file', new Blob([png], { type: 'image/png' }), 'cnic.png');
-    const up = ok(await sales.req('POST', '/documents', undefined, { form: fd }), 201);
-    const list = ok(await sales.get(`/documents?entity_type=CUSTOMER&entity_id=${ids.c1}`));
-    assert.equal(list.length, 1);
-    const f = await sales.get(`/documents/${up.id}/file`);
-    assert.equal(f.status, 200);
+describe('documents (Supabase Storage)', () => {
+  const { createClient } = require('@supabase/supabase-js');
+  // Same three steps as the web app: ask for a one-time link, upload straight to storage, record it.
+  async function upload(api, entityType, entityId, file, mime, docType, name) {
+    const link = { entity_type: entityType, entity_id: entityId, doc_type: docType };
+    const u = ok(await api.post('/documents/upload-url', { ...link, file_name: name, mime_type: mime, size: file.length }));
+    const sb = createClient(ctx.fake.url, ANON_KEY, { auth: { persistSession: false } });
+    const { error } = await sb.storage.from(u.bucket).uploadToSignedUrl(u.path, u.token, file, { contentType: mime });
+    assert.equal(error, null);
+    return { u, reg: await api.post('/documents', { ...link, original_name: name, stored_name: u.path }) };
+  }
+  it('uploads straight to storage, protects, and soft-deletes documents', async () => {
+    const { u, reg } = await upload(sales, 'CUSTOMER', ids.c1, png, 'image/png', 'CNIC_FRONT', 'cnic.png');
+    const up = ok(reg, 201);
+    assert.equal(up.size_bytes, png.length);
+    assert.equal(up.mime_type, 'image/png');
+    assert.match(up.stored_name, /^documents\/\d{4}-\d{2}\/[a-f0-9]{32}\.png$/);
+    const again = { entity_type: 'CUSTOMER', entity_id: ids.c1, original_name: 'x.png' };
+    assert.equal((await sales.post('/documents', { ...again, stored_name: u.path })).status, 409, 'same file recorded twice');
+    assert.equal((await sales.post('/documents', { ...again, stored_name: `documents/2026-01/${'a'.repeat(32)}.png` })).status, 400, 'never uploaded');
+    assert.equal((await sales.post('/documents', { ...again, stored_name: '../../secret.png' })).status, 400);
+    assert.equal(ok(await sales.get(`/documents?entity_type=CUSTOMER&entity_id=${ids.c1}`)).length, 1);
+    // viewing: permission check, then a short-lived storage link
+    const f = await sales.get(`/documents/${up.id}/file`, { redirect: 'manual' });
+    assert.equal(f.status, 302);
+    const file = await fetch(f.headers.get('location'));
+    assert.deepEqual(Buffer.from(await file.arrayBuffer()), png);
+    // plain browser links (img src, PDF links) authenticate with the fh_at cookie
+    assert.equal((await sales.get(`/documents/${up.id}/file`, { redirect: 'manual', auth: 'cookie' })).status, 302);
+    assert.ok(ok(await admin.get('/audit?action=VIEW_DOCUMENT')).length >= 2, 'CNIC views are audited');
     assert.equal((await viewer.get(`/documents/${up.id}/file`)).status, 403);
     assert.equal((await ctx.api().get(`/documents/${up.id}/file`)).status, 401);
-    const bad = new FormData();
-    bad.append('entity_type', 'CUSTOMER'); bad.append('entity_id', String(ids.c1)); bad.append('doc_type', 'OTHER');
-    bad.append('file', new Blob(['MZ'], { type: 'application/x-msdownload' }), 'virus.exe');
-    assert.equal((await sales.req('POST', '/documents', undefined, { form: bad })).status, 400);
+    const ask = { entity_type: 'CUSTOMER', entity_id: ids.c1, doc_type: 'OTHER' };
+    assert.equal((await sales.post('/documents/upload-url', { ...ask, file_name: 'virus.exe', mime_type: 'application/x-msdownload', size: 2 })).status, 400);
+    assert.equal((await sales.post('/documents/upload-url', { ...ask, file_name: 'big.pdf', mime_type: 'application/pdf', size: 50 * 1024 * 1024 })).status, 400);
+    assert.equal((await sales.post('/documents/upload-url', { ...ask, entity_id: 99999, file_name: 'a.pdf', mime_type: 'application/pdf', size: 10 })).status, 404);
+    assert.equal((await viewer.post('/documents/upload-url', { ...ask, file_name: 'a.pdf', mime_type: 'application/pdf', size: 10 })).status, 403);
     assert.equal((await sales.del(`/documents/${up.id}`)).status, 403);
     ok(await admin.del(`/documents/${up.id}`));
     assert.equal(ok(await sales.get(`/documents?entity_type=CUSTOMER&entity_id=${ids.c1}`)).length, 0);
   });
+  it('sets the customer photo', async () => {
+    const { reg } = await upload(sales, 'CUSTOMER', ids.c2, png, 'image/png', 'PHOTO', 'photo.png');
+    const d = ok(reg, 201);
+    assert.equal(ok(await sales.get(`/customers/${ids.c2}`)).customer.photo_document_id, d.id);
+  });
 });
 
-describe('sessions, backup and restore', () => {
-  it('expires idle sessions', async () => {
-    const { pool } = require('../src/db/pool');
-    const s = ctx.api();
-    ok(await s.post('/auth/login', { username: 'viewer', password: 'Passw0rd!' }));
-    await pool.query("UPDATE sessions SET expires_at = now() - interval '1 minute' WHERE user_id = (SELECT id FROM users WHERE username='viewer')");
-    const r = await s.get('/customers');
-    assert.equal(r.status, 401);
-    assert.equal(r.data.code, 'SESSION_EXPIRED');
+describe('logo, export and public settings', () => {
+  it('keeps the company logo in Supabase Storage and prints it on PDFs', async () => {
+    const fd = new FormData();
+    fd.append('file', new Blob([png], { type: 'image/png' }), 'logo.png');
+    ok(await admin.req('POST', '/settings/logo', undefined, { form: fd }));
+    const b = ok(await ctx.api().get('/public/branding'));
+    assert.equal(b.hasLogo, true);
+    assert.ok(b.logoVersion >= 1);
+    const l = await ctx.api().get('/public/logo');
+    assert.equal(l.status, 200);
+    assert.deepEqual(l.data, png);
+    const pays = ok(await acct.get(`/payments?booking_id=${ids.b1}`));
+    assert.equal((await acct.get(`/payments/${pays[0].id}/receipt.pdf`)).data.slice(0, 4).toString(), '%PDF');
+    assert.equal((await acct.req('POST', '/settings/logo', undefined, { form: fd })).status, 403);
+    ok(await admin.del('/settings/logo'));
+    assert.equal(ok(await ctx.api().get('/public/branding')).hasLogo, false);
+    assert.equal((await ctx.api().get('/public/logo')).status, 404);
   });
-  it('backs up and restores the database and documents', async () => {
-    const b = ok(await admin.post('/backup'), 201);
-    assert.match(b.name, /^faisal-homes-\d{8}-\d{6}-manual\.zip$/);
-    assert.ok(b.counts.payments > 0);
-    const after = ok(await sales.post('/customers', { full_name: 'Added After Backup', cnic: '11111-2222222-3' }), 201);
-    assert.equal(ok(await admin.get(`/customers?q=Added After`)).length, 1);
-    assert.equal((await admin.post(`/backup/restore/${b.name}`, { confirm: 'no' })).status, 400);
-    const res = ok(await admin.post(`/backup/restore/${b.name}`, { confirm: 'RESTORE' }));
-    assert.match(res.safety_backup, /pre-restore/);
-    // all sessions are cleared after restore
-    assert.equal((await admin.get('/customers')).status, 401);
-    ok(await admin.post('/auth/login', { username: 'admin', password: 'Admin@12345' }));
-    assert.equal(ok(await admin.get(`/customers?q=Added After`)).length, 0);
-    assert.equal((await admin.get(`/customers/${after.id}`)).status, 404);
-    const list = ok(await admin.get('/backup'));
-    assert.ok(list.backups.length >= 2);
-    const f = ok(await admin.get(`/bookings/${ids.b1}`));
-    assert.equal(f.plot_status, 'TRANSFERRED');
+  it('exports all data to Excel (admin only)', async () => {
     const x = await admin.get('/backup/export.xlsx');
+    assert.equal(x.status, 200);
     assert.equal(x.data.slice(0, 2).toString(), 'PK');
+    assert.equal((await acct.get('/backup/export.xlsx')).status, 403);
+  });
+  it('gives the browser only the Supabase URL and publishable key', async () => {
+    const c = ok(await ctx.api().get('/public/config'));
+    assert.deepEqual(Object.keys(c).sort(), ['supabaseAnonKey', 'supabaseUrl']);
+    assert.equal(c.supabaseAnonKey, ANON_KEY);
+    assert.ok(!JSON.stringify(c).includes('service'));
   });
 });

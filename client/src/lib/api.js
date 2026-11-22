@@ -1,4 +1,5 @@
-// Thin fetch wrapper. All state-changing calls carry the X-FH-Request header (CSRF protection on the server).
+// Thin fetch wrapper. Every call carries the Supabase login token (Authorization header) and the
+// X-FH-Request header (CSRF protection on the server for state-changing calls).
 export class ApiError extends Error {
   constructor(status, data) {
     super(data?.error || `Request failed (${status})`);
@@ -7,9 +8,15 @@ export class ApiError extends Error {
 }
 let onUnauthorized = () => {};
 export function setUnauthorizedHandler(fn) { onUnauthorized = fn; }
+let tokenProvider = async () => null;
+/** fn returns the current (auto-refreshed) access token, or null when signed out. */
+export function setTokenProvider(fn) { tokenProvider = fn; }
 
 async function request(method, url, body, { form } = {}) {
   const headers = { 'X-FH-Request': '1' };
+  let token = null;
+  try { token = await tokenProvider(); } catch { /* signed out */ }
+  if (token) headers.Authorization = `Bearer ${token}`;
   let payload;
   if (form) payload = form;
   else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
@@ -17,7 +24,7 @@ async function request(method, url, body, { form } = {}) {
   try {
     res = await fetch(`/api${url}`, { method, headers, body: payload, credentials: 'same-origin' });
   } catch {
-    throw new ApiError(0, { error: 'Cannot reach the server. Check that FAISAL HOMES is running and the network is connected.' });
+    throw new ApiError(0, { error: 'Cannot reach the server. Check your internet connection.' });
   }
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json() : null;

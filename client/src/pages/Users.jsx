@@ -24,7 +24,7 @@ export default function UsersPage() {
     try { await api.post(`/users/${pw.id}/reset-password`, { password: pw.password, must_change_password: pw.must_change_password }); toast('Password reset'); setPw(null); } catch (ex) { setErr(ex); }
   };
   const cols = [
-    { key: 'full_name', header: 'Name', render: (r) => <b>{r.full_name}</b> }, { key: 'username', header: 'Username' },
+    { key: 'full_name', header: 'Name', render: (r) => <b>{r.full_name}</b> }, { key: 'email', header: 'Email (login)' },
     { key: 'role', header: 'Role', render: (r) => <div>{roleLabel(r.role)}<div className="text-xs text-slate-500">{ROLE_HELP[r.role]}</div></div> },
     { key: 'is_active', header: 'Status', render: (r) => <StatusBadge status={r.is_active ? 'ACTIVE' : 'ARCHIVED'} label={r.is_active ? 'Active' : 'Disabled'} /> },
     { key: 'last_login_at', header: 'Last login', render: (r) => dateTime(r.last_login_at) },
@@ -32,13 +32,13 @@ export default function UsersPage() {
   ];
   return (
     <>
-      <PageHeader title="Users & Roles" subtitle="Office staff accounts" actions={<button type="button" className="btn-primary" onClick={() => setForm({ username: '', full_name: '', role: 'SALES', password: '', must_change_password: true, is_active: true })}><Plus className="h-4 w-4" />Add user</button>} />
+      <PageHeader title="Users & Roles" subtitle="Office staff accounts. Each user signs in with their email and password (Supabase Auth)." actions={<button type="button" className="btn-primary" onClick={() => setForm({ email: '', full_name: '', role: 'SALES', password: '', must_change_password: true, is_active: true })}><Plus className="h-4 w-4" />Add user</button>} />
       <ErrorBox error={error} />
       {isLoading ? <Loading /> : <DataTable columns={cols} rows={data} searchable={false} />}
       <Modal open={!!form} onClose={() => setForm(null)} title={form?.id ? `Edit ${form.full_name}` : 'Add user'} size="sm" footer={<><button type="button" className="btn-secondary" onClick={() => setForm(null)}>Cancel</button><button form="uf" className="btn-primary">Save</button></>}>
         {form && <form id="uf" onSubmit={save} className="space-y-3">
           <Input label="Full name" required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
-          {!form.id && <Input label="Username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off" />}
+          {!form.id && <Input label="Email (used to sign in)" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="off" hint="No email is sent. Any address the person will remember works." />}
           <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} options={ROLES} hint={ROLE_HELP[form.role]} />
           {!form.id && <Input label="Password" type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} hint="At least 8 characters" autoComplete="new-password" />}
           {!form.id && <Checkbox label="Ask user to change password at first login" checked={form.must_change_password} onChange={(v) => setForm({ ...form, must_change_password: v })} />}
@@ -50,7 +50,7 @@ export default function UsersPage() {
         {pw && <form id="pw" onSubmit={reset} className="space-y-3">
           <Input label="New password" type="password" required value={pw.password} onChange={(e) => setPw({ ...pw, password: e.target.value })} autoComplete="new-password" />
           <Checkbox label="User must change it at next login" checked={pw.must_change_password} onChange={(v) => setPw({ ...pw, must_change_password: v })} />
-          <Notice>The user will be logged out of all devices.</Notice>
+          <Notice>The new password works immediately. A device that is already signed in stays signed in until it logs out or is idle. To stop someone at once, disable the account instead (Edit → Account active).</Notice>
           <ErrorBox error={err} />
         </form>}
       </Modal>

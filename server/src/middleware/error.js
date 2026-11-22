@@ -7,7 +7,8 @@ const UNIQUE_MESSAGES = {
   plots_no_uq: 'This plot number already exists in this block',
   blocks_name_uq: 'A block with this name already exists in this society',
   societies_name_uq: 'A society with this name already exists',
-  users_username_uq: 'This username is already taken',
+  users_email_uq: 'A user with this email already exists',
+  documents_stored_name_key: 'This file has already been saved',
   bookings_one_active_per_plot: 'This plot already has an active booking. It cannot be booked or sold twice.',
   expense_categories_name_uq: 'This category already exists',
 };

@@ -4,7 +4,7 @@ const settings = require('./settings');
 const { formatPKR, toPaisa } = require('./money');
 const { fmtDate, today, dateOf } = require('./dates');
 const { amountInWords } = require('./words');
-const { findLogo } = require('../routes/public');
+const { getLogo } = require('../routes/public');
 
 const NAVY = '#0b2545';
 const GOLD = '#b08d2f';
@@ -16,7 +16,9 @@ const KIND = { BOOKING: 'Booking', DOWN_PAYMENT: 'Down Payment', MONTHLY: 'Month
 async function context() {
   const all = await settings.getAll();
   const style = all.display?.number_format || 'intl';
-  return { company: all.company || {}, receipt: all.receipt || {}, style, logo: findLogo(), money: (v) => formatPKR(v, style) };
+  let logo = null;
+  try { logo = await getLogo(); } catch (e) { console.error('[pdf] logo not loaded:', e.message); }
+  return { company: all.company || {}, receipt: all.receipt || {}, style, logo, money: (v) => formatPKR(v, style) };
 }
 
 /** Stream a PDF to the response. builder(doc, ctx) draws the content. */

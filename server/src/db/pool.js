@@ -6,8 +6,15 @@ const config = require('../config');
 types.setTypeParser(1082, (v) => v);
 types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10))); // bigint counts
 
-// Session timezone = business timezone so CURRENT_DATE (used for overdue logic) is the Pakistan date.
-const pool = new Pool({ connectionString: config.databaseUrl, max: 15, options: `-c timezone=${config.timezone}` });
+// The business timezone (Asia/Karachi) is set on the database itself by supabase/schema.sql, so
+// CURRENT_DATE (used for overdue logic) is the Pakistan date on every pooled connection.
+const pool = new Pool({
+  connectionString: config.databaseUrl,
+  ssl: config.databaseSsl,
+  max: config.dbPoolMax,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,
+});
 pool.on('error', (err) => console.error('[db] idle client error', err.message));
 
 async function query(text, params) {

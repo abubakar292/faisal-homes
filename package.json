@@ -1,15 +1,17 @@
 {
   "name": "faisal-homes",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "FAISAL HOMES - Real Estate Society, Land, Plotting & Installment Management Software",
+  "description": "FAISAL HOMES - Real Estate Society, Land, Plotting & Installment Management Software (Supabase + Vercel)",
   "scripts": {
-    "setup": "npm install --prefix server --omit=dev && npm run migrate --prefix server",
+    "install:all": "npm install --prefix server && npm install --prefix client",
     "build:client": "npm install --prefix client && npm run build --prefix client",
-    "start": "npm start --prefix server",
-    "migrate": "npm run migrate --prefix server",
-    "seed:demo": "npm run seed:demo --prefix server",
+    "dev": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "check": "npm run check --prefix server",
     "test": "npm test --prefix server"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

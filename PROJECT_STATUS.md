@@ -1,23 +1,57 @@
 # FAISAL HOMES — Project Status
 
-Last updated: 22 November 2026 · Version 1.1.0 (Module 1: Land Management upgrade)
+Last updated: 22 November 2026 · Version 2.0.0 (Supabase + Vercel, fresh database)
+
+## Version 2.0.0: Supabase + Vercel
+The software calculations, screens and reports are unchanged. What changed is where it runs and how people sign in:
+
+| Before (1.1.0) | Now (2.0.0) |
+|---|---|
+| PostgreSQL on the office PC, 5 upgrade files | Supabase PostgreSQL, one fresh file `supabase/schema.sql` run in the SQL Editor |
+| Username + password stored by the app, sessions table | **Supabase Auth**: email + password. The admin creates staff logins on the Users page (no emails sent) |
+| Documents and logo in `storage/uploads` on the PC | **Supabase Storage**, private bucket `documents`, uploads go straight from the browser, files open with 60-second links |
+| One Node process on the PC, Windows installer | **Vercel**: static web app + the API as a serverless function (`api/index.js`, `vercel.json`) |
+| Backup/restore inside the app (`pg_dump`) | Supabase backups (Pro plan) + "Export all data (Excel)". In-app backup for Supabase: next step |
+
+Also in 2.0.0:
+- Every table has row level security and no access for Supabase's public API roles; views use `security_invoker`.
+- Database timezone is set to Asia/Karachi by the schema (overdue logic uses the Pakistan date).
+- The old "Land Purchase" expense type no longer exists: payments to land owners can only be made with Pay Land Owner (this also
+  closes the gap where an admin could create such a category and bypass the land ledger).
+- `npm run check`: read-only check of a Supabase setup.
+
+Removed: `INSTALL-FAISAL-HOMES.bat`, `start-windows.bat`, `Dockerfile`, `docker-compose.yml`, the 5 old migration files, the backup
+service, `create-admin.js`, the demo seed and the old headless-browser smoke test (it used the old username login). All of them are
+still in the git history (commit `462f39f`).
 
 ## Test evidence
-- **Backend integration tests:** 51/51 passing (`npm test` in `server/`): 31 for the original modules (`business.test.js`) and
-  20 for the land upgrade (`land.test.js`, listed under Module 1 below). The original 31 were updated only where the land rules changed (seller
-  payments now go through Pay Land Owner; the old "Land Purchase" expense category is refused). They run against a real PostgreSQL 16 database and HTTP server,
-  covering setup/login/lockout/CSRF, role permissions, land area conversion, bulk plots, duplicate plot/CNIC, CNIC masking, booking with
-  30% + 36 monthly + 6 half-yearly, **sequential and concurrent double-booking prevention**, partial payments (oldest due first), over-payment,
-  future dates, cheque reference rule, **payment reversal**, SOLD ↔ BOOKED status, **schedule editing**, overdue detection, late fees
-  (never automatic), charge payments, **transfer dues check + override**, transfer with fee, ledger balances, **cancellation with refund**
-  and forfeiture, re-selling the plot, expenses + cancellation, financial-summary identities, every report as JSON/Excel/PDF, receipt reprint
-  (duplicate), documents upload/permissions/soft delete, session expiry, and **backup + restore** (data and sessions).
-- **Browser test:** 68/68 checks passing in headless Chrome (`tests/e2e/smoke.js`). It opens every page and every report, then runs
-  the land workflows (summary cards, Add Land with automatic price + purchase expense, over-payment refusal, split-funded Pay Land Owner,
-  land ledger balance, payment reversal, add investment, land statement Excel/PDF), registration, the booking wizard, payment, partial payment and reversal, over-payment refusal, schedule editor, expense, bulk plots, transfer dues
-  check, reservation, backup, the mobile layout and viewer permissions. No console, page or server errors.
-- **PDFs checked visually:** receipt (customer + office copy), booking confirmation with schedule, transfer letter, report PDFs,
-  land purchase statement, customer money utilization report.
+- **Backend integration tests: 53/53 passing** (`npm test`): 34 in `business.test.js`, 19 in `land.test.js`. They run the real
+  `supabase/schema.sql` on a temporary PostgreSQL 17 and a real HTTP server, with a stand-in for Supabase Auth (ES256-signed tokens,
+  public keys, admin user API) and Supabase Storage, used through the real `@supabase/supabase-js` library. Covered:
+  - **Login and users:** first-admin setup only once, Supabase logins, wrong passwords, forged/expired tokens, a login without a
+    FAISAL HOMES user, disable/enable (blocked in Supabase too), password change and admin reset with "must change password",
+    the last-admin rule, the CSRF header, role permissions.
+  - **All earlier business rules:** land area and price, bulk plots, duplicate plot/CNIC, CNIC masking, booking with 30% + 36 monthly
+    + 6 half-yearly, sequential and concurrent double-booking prevention, partial payments oldest-due-first, over-payment, future
+    dates, cheque rule, payment reversal, SOLD ↔ BOOKED, schedule editing, overdue and manual late fees, charge payments, transfer
+    dues check + override, transfer with fee, ledgers, cancellation with refund, expenses, financial-summary identities.
+  - **Land module:** split personal/customer funding, reversals, investment totals, land ledgers.
+  - **Reports and printing:** every report as JSON/Excel/PDF, receipt reprint (duplicate).
+  - **Documents, logo and export:** direct-to-storage document upload, the permission check before a file opens, the token cookie for
+    browser links, document type/size limits, customer photo, the logo in Storage (and on PDFs), the Excel export, and the public
+    config exposing only the URL + publishable key.
+- **Browser check (built-in browser, against the same local stand-ins):**
+  - create administrator, then dashboard;
+  - register a customer, upload a CNIC image straight to storage, and its thumbnail shows through the cookie + short-lived link;
+  - PDF and Excel links work;
+  - log out clears access; a wrong password is refused, the right one signs in;
+  - the Settings and Backup pages render. No console errors.
+- **Not yet tested against a real Supabase project and a real Vercel deployment.** Run `npm run check` with your `.env` after
+  running `schema.sql`, then sign in on the Vercel address.
+
+## Earlier test evidence (1.1.0, PostgreSQL on the office PC)
+- 51/51 backend tests and 68/68 headless-browser checks passed, and PDFs were checked visually (receipt, booking confirmation,
+  transfer letter, report PDFs, land statement, customer money report).
 
 ## Completed modules
 | # | Module | Status |
@@ -33,9 +67,9 @@ Last updated: 22 November 2026 · Version 1.1.0 (Module 1: Land Management upgra
 | 9 | Expenses: 12 categories with cost types, attachments, land/society links, edit (non-financial fields), cancellation with reversal, daily/monthly/yearly report | Done |
 | 10 | Accounting & reports: financial summary (installment-method profit), collections, daily/monthly cash, overdue, upcoming, sales, receivables, expense summary/list, inventory, customer ledger, plot ledger. All export to Excel and PDF | Done |
 | 11 | Documents linked to customer/plot/land/booking/transfer/expense, protected download, soft delete | Done |
-| 12 | Roles (Admin/Accountant/Sales/Viewer), bcrypt, server sessions with idle timeout, login lockout, CSRF header, security headers, audit log with before/after data, CNIC masking | Done |
-| 13 | Backups: automatic daily + catch-up at startup, manual, download, restore (stored or uploaded), safety backup before restore, off-site copy folder, full Excel export | Done |
-| 14 | Deployment: Windows batch setup/start, LAN access, auto-start, Docker + Caddy for VPS, cost breakdown | Done (Docker files not executed in build environment) |
+| 12 | Roles (Admin/Accountant/Sales/Viewer), Supabase Auth login, idle logout, CSRF header, security headers, audit log with before/after data, CNIC masking | Done (2.0.0) |
+| 13 | Backups: Supabase backups + full Excel export. In-app backup/restore for Supabase | Excel export done; in-app backup planned |
+| 14 | Deployment: Supabase + Vercel (`supabase/schema.sql`, `vercel.json`, `api/index.js`), setup check, cost breakdown | Done (2.0.0), not yet run on a real Vercel project |
 
 ## Module 1: Land Management upgrade (Version 1.1.0, 22 Nov 2026) — COMPLETE, all tests passing
 Scope: PROPERTY → LAND MANAGEMENT only. No other module was rebuilt. The changes outside Land are listed under "Touch points" below.
@@ -158,7 +192,7 @@ old seller payments, then runs the real upgrade. It covers:
   to the Expenses module and was out of scope.
 - Payments made before the upgrade have no recorded source. They can stay as they are; the reports show them separately.
 
-## Version 1.0.1 (22 Nov 2026): Windows one-click installer
+## Version 1.0.1 (22 Nov 2026): Windows one-click installer (removed in 2.0.0)
 - `INSTALL-FAISAL-HOMES.bat`: finds/extracts the zip, installs Node.js 22 and PostgreSQL 16 if missing (signature-checked), creates a
   limited database user + database, writes a protected `.env`, installs components, runs migrations, makes the first backup, runs the
   self-test on a temporary database, creates a Desktop shortcut and starts the app.
@@ -170,6 +204,14 @@ old seller payments, then runs the real upgrade. It covers:
   UTF-8, local-only access by default (`HOST=127.0.0.1`), Desktop icon.
 
 ## Database changes
+**2.0.0:** everything below is merged into one fresh file, `supabase/schema.sql` (recorded as `001_initial`). Changes from 1.1.0:
+- `users`: `auth_user_id` (Supabase Auth) + `email` replace `username` + `password_hash`; the `sessions` table is gone.
+- `expense_categories.cost_type` allows only PROJECT and OPERATING (the retired LAND_PAYMENT type and its "Land Purchase" category are gone).
+- `documents.stored_name` is the Storage path and is unique. `settings.branding` points to the logo in Storage. No `backup` setting.
+- Row level security on all tables, views with `security_invoker`, public API roles revoked, `documents` storage bucket,
+  database timezone Asia/Karachi.
+
+History of the 1.x files (removed in 2.0.0):
 - `001_init.sql`: all tables, constraints and indexes (incl. one-active-booking-per-plot unique index)
 - `002_reference_data.sql`: counters, expense categories, default settings
 - `003_views.sql`: `v_booking_finance`, `v_charge_finance` (live balances)
@@ -184,6 +226,12 @@ old seller payments, then runs the real upgrade. It covers:
   - Tested on a database made by version 1.0.1 (automated test, plus the demo database).
 
 ## Known limitations / next phase
+0. **Supabase/Vercel specifics (2.0.0):**
+   - The in-app backup/restore is not rebuilt yet (use Supabase backups + the Excel export).
+   - Failed sign-ins are logged by Supabase (Authentication → Logs), not in the app's audit log.
+   - A password reset does not sign out a device that is already signed in; disabling the account does, immediately.
+   - The Excel export and large reports go through a Vercel function, whose responses are limited to about 4.5 MB. Very large
+     exports will need to be split later.
 1. **Import from your current software / Excel**: there is no bulk import yet. Existing customers, plots and past payments must be entered
    (bookings and payments can be back-dated). An Excel import tool is the recommended next step.
 2. **Urdu**: translation layer and right-to-left switching are built in, but only some labels are translated.
@@ -196,7 +244,9 @@ old seller payments, then runs the real upgrade. It covers:
 7. Two-factor login is not implemented.
 
 ## Next steps (suggested order)
-1. Install on the office PC with your real company details and logo, and test with demo data for a few days.
-2. Build the Excel import for existing customers, bookings and payment history.
-3. Complete the Urdu translation.
-4. Optional: drawn site-plan map, SMS gateway, multi-branch.
+1. Run `supabase/schema.sql` on the Supabase project, deploy on Vercel, run `npm run check`, create the administrator, and test with a
+   few sample records for some days.
+2. Rebuild backup/restore inside the app for Supabase (download a backup file, restore from it).
+3. Build the Excel import for existing customers, bookings and payment history.
+4. Complete the Urdu translation.
+5. Optional: drawn site-plan map, SMS gateway, multi-branch.

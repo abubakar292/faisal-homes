@@ -1,12 +1,14 @@
 'use strict';
-const crypto = require('crypto');
+// Login is Supabase Auth. The browser sends the Supabase access token as "Authorization: Bearer …".
+// Plain browser links (PDFs, Excel downloads, document images) cannot add that header, so the same
+// token is also accepted from the fh_at cookie, which the web app keeps in step with the session.
 const { pool } = require('../db/pool');
 const { can, permissionsFor } = require('../lib/permissions');
 const settings = require('../lib/settings');
+const { verifyAccessToken } = require('../lib/supabase');
 const { AppError } = require('../lib/errors');
 
-const COOKIE = 'fh_session';
-const hashToken = (t) => crypto.createHash('sha256').update(t).digest('hex');
+const TOKEN_COOKIE = 'fh_at';
 
 async function timeoutMinutes() {
   const s = await settings.get('security');
@@ -14,48 +16,50 @@ async function timeoutMinutes() {
   return Number.isFinite(m) && m >= 5 && m <= 1440 ? m : 30;
 }
 
-async function createSession(user, req) {
-  const token = crypto.randomBytes(32).toString('base64url');
-  const mins = await timeoutMinutes();
-  await pool.query(
-    `INSERT INTO sessions (id, user_id, expires_at, ip, user_agent) VALUES ($1,$2, now() + ($3 || ' minutes')::interval, $4, $5)`,
-    [hashToken(token), user.id, String(mins), req.ip, String(req.headers['user-agent'] || '').slice(0, 300)]);
-  return token;
+function tokenFrom(req) {
+  const h = req.get('authorization') || '';
+  if (/^bearer\s+/i.test(h)) return h.replace(/^bearer\s+/i, '').trim();
+  return req.cookies?.[TOKEN_COOKIE] || null;
 }
 
-async function destroySession(req) {
-  const token = req.cookies?.[COOKIE];
-  if (token) await pool.query('DELETE FROM sessions WHERE id = $1', [hashToken(token)]);
-}
-
-/** Loads req.user from the session cookie (sliding idle timeout). Does not reject anonymous requests. */
+/** Loads req.user from the Supabase token. Does not reject anonymous requests. */
 async function loadUser(req, _res, next) {
   try {
-    const token = req.cookies?.[COOKIE];
+    const token = tokenFrom(req);
     if (!token) return next();
-    const id = hashToken(token);
-    const mins = await timeoutMinutes();
-    const r = await pool.query(
-      `UPDATE sessions s SET last_seen_at = now(), expires_at = now() + ($2 || ' minutes')::interval
-       FROM users u
-       WHERE s.id = $1 AND s.user_id = u.id AND s.expires_at > now() AND u.is_active
-       RETURNING u.id, u.username, u.full_name, u.role, u.must_change_password`, [id, String(mins)]);
-    if (r.rowCount) {
-      req.user = r.rows[0];
-      req.user.permissions = permissionsFor(req.user.role);
-    } else {
-      req.sessionExpired = true;
-      await pool.query('DELETE FROM sessions WHERE id = $1', [id]);
+    let claims;
+    try {
+      claims = await verifyAccessToken(token);
+    } catch (e) {
+      if (e instanceof AppError) throw e;
+      req.authProblem = e.code === 'EXPIRED' ? 'SESSION_EXPIRED' : 'INVALID_TOKEN';
+      return next();
     }
+    req.authClaims = claims;
+    const r = await pool.query(
+      `SELECT id, email, full_name, role, is_active, must_change_password, auth_user_id FROM users WHERE auth_user_id = $1`, [claims.sub]);
+    const u = r.rows[0];
+    if (!u) { req.authProblem = 'NO_PROFILE'; return next(); }
+    if (!u.is_active) { req.authProblem = 'DISABLED'; return next(); }
+    req.user = { ...u, username: u.email, permissions: permissionsFor(u.role) };
     next();
   } catch (e) { next(e); }
 }
 
+const PROBLEMS = {
+  SESSION_EXPIRED: [401, 'Your session has expired. Please log in again.'],
+  INVALID_TOKEN: [401, 'Please log in'],
+  NO_PROFILE: [403, 'This login is not linked to a FAISAL HOMES user. Ask an administrator to add you on the Users page.'],
+  DISABLED: [403, 'This account is disabled'],
+};
+
+function authFailure(req) {
+  const [status, message] = PROBLEMS[req.authProblem] || [401, 'Please log in'];
+  return new AppError(status, message, req.authProblem || 'UNAUTHENTICATED');
+}
+
 function requireAuth(req, _res, next) {
-  if (!req.user) {
-    return next(new AppError(401, req.sessionExpired ? 'Your session has expired. Please log in again.' : 'Please log in',
-      req.sessionExpired ? 'SESSION_EXPIRED' : 'UNAUTHENTICATED'));
-  }
+  if (!req.user) return next(authFailure(req));
   // Users who must change their password can only reach auth endpoints.
   if (req.user.must_change_password && !req.originalUrl.startsWith('/api/auth')) {
     return next(new AppError(403, 'Please change your password first', 'MUST_CHANGE_PASSWORD'));
@@ -65,7 +69,7 @@ function requireAuth(req, _res, next) {
 
 function requirePerm(...perms) {
   return (req, _res, next) => {
-    if (!req.user) return next(new AppError(401, 'Please log in', 'UNAUTHENTICATED'));
+    if (!req.user) return next(authFailure(req));
     if (!perms.some((p) => can(req.user.role, p))) return next(new AppError(403, 'You do not have permission to do this', 'FORBIDDEN'));
     next();
   };
@@ -78,4 +82,4 @@ function csrfGuard(req, _res, next) {
   next();
 }
 
-module.exports = { COOKIE, createSession, destroySession, loadUser, requireAuth, requirePerm, csrfGuard, hashToken, timeoutMinutes };
+module.exports = { TOKEN_COOKIE, loadUser, requireAuth, requirePerm, csrfGuard, timeoutMinutes, authFailure };

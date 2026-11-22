@@ -1,42 +1,36 @@
 # FAISAL HOMES
 
-**Real Estate Society, Land, Plotting & Installment Management Software**: self-hosted, no monthly subscription.
+**Real Estate Society, Land, Plotting & Installment Management Software**, running on **Supabase** (database, login, file storage)
+and **Vercel** (web app + API).
 
 Land records (with land ledger, owner payments and funding sources) → societies & blocks → plots → customers → bookings with
-installment plans → payments & receipts → transfers → expenses → financial reports, with role-based security, audit trail and
-automatic backups.
+installment plans → payments & receipts → transfers → expenses → financial reports, with role-based security and an audit trail.
 
 | Document | What it covers |
 |---|---|
+| [DEPLOYMENT.md](DEPLOYMENT.md) | **Setting up Supabase and Vercel step by step**, local development, backups, costs |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Technology, database design, business and accounting rules, permissions |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Installing on a Windows office PC or a VPS, backups, **cost breakdown** |
 | [PROJECT_STATUS.md](PROJECT_STATUS.md) | What is complete and tested, known limitations, next steps |
 
-## Install on Windows (one click)
-1. Put `faisal-homes.zip` and `INSTALL-FAISAL-HOMES.bat` in the same folder (for example Downloads).
-2. Double-click **INSTALL-FAISAL-HOMES.bat**. Click **YES** whenever Windows asks for permission.
-3. When it finishes, your browser opens FAISAL HOMES. Fill in **Create administrator** and you are done.
+## Set up (short version, details in [DEPLOYMENT.md](DEPLOYMENT.md))
+1. Create a Supabase project. In **SQL Editor**, paste and run [`supabase/schema.sql`](supabase/schema.sql) once.
+2. In Supabase → Authentication, keep the Email provider on and turn off public sign-ups.
+3. Import this GitHub repository into Vercel and add the environment variables from [`.env.example`](.env.example).
+4. Open the Vercel address and fill in **Create administrator**. Add the other staff on the **Users** page.
 
-The installer finds and extracts the zip, installs Node.js 22 and PostgreSQL 16 if missing (official, signature-checked installers),
-creates the database, writes `.env`, installs components, creates the tables, makes the first backup, runs the 51-check self-test on
-temporary databases, adds a **FAISAL HOMES** Desktop shortcut and starts the program. Details: [DEPLOYMENT.md](DEPLOYMENT.md).
-After that, start FAISAL HOMES any day with the Desktop shortcut.
-
-**Upgrading from an earlier version:** run the new installer the same way. Your `.env`, documents and backups are kept, a database
-backup is made first, and the database upgrade itself makes another safety backup (`…-pre-migration.zip`) before changing anything.
-
-Want to explore first? In `server/` run `npm run seed:demo` on an empty database (login `admin` / `Admin@12345`).
-
-## Quick start (any OS, command line)
+## Local development
 ```
-cp .env.example .env          # set DATABASE_URL
-npm run setup                 # installs server, creates/updates the database
-npm start                     # http://localhost:4000
-npm test                      # 31 integration tests (needs a PostgreSQL server; uses database faisal_homes_test)
+cp .env.example .env          # fill in your Supabase values
+npm run install:all           # installs server and client
+npm run check                 # read-only check of the Supabase setup
+npm run dev                   # API on http://localhost:4000
+npm run dev:client            # web app on http://localhost:5173 (talks to the API above)
+npm test                      # 53 automatic tests (start their own temporary PostgreSQL; no Supabase needed)
 ```
-The web interface is already built in `client/dist`. To change the interface: `npm run build:client`.
 
 ## Daily use: a short guide for office staff
+
+**Sign in** with your email and password. The administrator creates every staff login on the Users page.
 
 **Sell a plot.** Click **New Booking**, then:
 1. Search for the customer (or click *Register a new customer*).
@@ -60,20 +54,22 @@ If installments are overdue, the system blocks the transfer unless an admin ente
 
 **Daily closing.** Go to **Reports → Daily Cash Report** and print or export to Excel.
 
-**End of day.** Backups run automatically. Check **Backup & Restore** to see the latest one, and copy it to a USB drive or Google Drive weekly.
+**Backups.** Supabase keeps the database backups (daily on its Pro plan). On **Backup & Export** you can download every table as one
+Excel file. Keep a copy off-site.
 
 ## Roles
 | Role | Can do |
 |---|---|
-| Admin | Everything, including cancellations, reversals, transfers, schedule changes, users, settings, backups |
+| Admin | Everything, including cancellations, reversals, transfers, schedule changes, users, settings, data export |
 | Accountant | Collect payments, receipts, expenses, all reports |
 | Sales Staff | Register customers, reserve plots, create bookings (with booking receipt) |
 | Viewer | Read-only access; CNIC numbers are masked |
 
 ## Project layout
 ```
-server/     Node.js + Express API, SQL migrations, business services, PDF/Excel, backups, tests
-client/     React + Tailwind web interface (built copy in client/dist)
-tests/e2e/  Headless-browser smoke test
-storage/    Created at runtime: uploads/ (documents, logo) and backups/
+supabase/schema.sql  the complete database: run once in the Supabase SQL Editor
+api/index.js         Vercel serverless function (the Express API)
+server/              Node.js + Express API, business services, PDF/Excel, Supabase Auth + Storage, tests
+client/              React + Tailwind web app (Vercel builds it into client/dist)
+vercel.json          Vercel build, function and routing settings
 ```

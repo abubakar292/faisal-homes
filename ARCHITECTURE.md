@@ -6,28 +6,31 @@ Real Estate Society, Land, Plotting & Installment Management Software.
 
 | Layer | Choice | Reason |
 |---|---|---|
-| Database | **PostgreSQL 16** | Real transactions, row locking (prevents double booking), exact `NUMERIC` money, free, runs on Windows and Linux |
-| Backend | **Node.js 22 + Express 5** | One small process, easy to run on an office PC or a VPS |
-| DB access | Plain SQL with `pg` + numbered SQL migrations | Exact control of money maths and locking, no binary engines to download, easy to audit |
-| Frontend | **React 18 + Vite + Tailwind CSS** | Fast, responsive, built once into static files served by the same Node process |
+| Database | **Supabase PostgreSQL** (17) | Real transactions, row locking (prevents double booking), exact `NUMERIC` money, managed backups |
+| Login | **Supabase Auth** (email + password) | Hosted, hashed passwords, signed access tokens (checked on every API call), no emails needed for staff logins |
+| Files | **Supabase Storage** (private bucket) | Documents never pass through the API: browsers upload with one-time links and open files with 60-second links |
+| Backend | **Node.js + Express 5**, deployed as a **Vercel** serverless function (`api/index.js`) | The business rules stay on the server, inside database transactions |
+| DB access | Plain SQL with `pg` through the Supabase **transaction pooler** | Exact control of money maths and locking, easy to audit |
+| Frontend | **React 18 + Vite + Tailwind CSS**, served by Vercel | Fast, responsive, static files on Vercel's CDN |
 | PDF | `pdfkit` (server-side) | Receipts, booking confirmations, transfer letters, report PDFs look identical on every PC |
 | Excel | `exceljs` | Native `.xlsx` with real number/date cells |
-| Auth | bcrypt password hashing + server-side sessions in PostgreSQL | Sessions can be expired/revoked; idle timeout enforced on the server |
-| Backups | `pg_dump` + uploaded documents zipped together | Full restore of database and files in one step |
+| Schema | One file, `supabase/schema.sql`, run in the Supabase SQL Editor | Fresh start; later changes as numbered SQL files |
 
-Why not Next.js: this is an internal office system with no public SEO pages. A React SPA served by one Express
-server is simpler to install on a Windows office PC (one process, one port) and needs less memory.
-
-Everything is self-hosted. There is no paid software licence or subscription in the stack.
+Why the browser does not read Supabase directly: the money rules (locking plots, applying payments oldest-due-first, land
+funding, reversals, cancellations, PDFs) need server-side transactions and permission checks. The browser only uses Supabase
+for signing in and for uploading files with a link the server created.
 
 ## 2. High-level design
 
 ```
-Browser (staff PCs, tablets, phones on office LAN or internet)
-        │  HTTPS / HTTP on LAN
-        ▼
-Node.js (Express)  ── serves built React app (client/dist)
-   ├── /api/auth        login, logout, session timeout, change password
+Browser (staff PCs, tablets, phones)
+   │  sign-in + file uploads ───────────────►  Supabase Auth / Supabase Storage
+   │  HTTPS, Authorization: Bearer <Supabase access token>
+   ▼
+Vercel ── static React app (client/dist)
+   └── /api/*  → serverless function api/index.js (Express)
+   ├── /api/public      branding, logo, public Supabase settings (URL + publishable key)
+   ├── /api/auth        first-time setup, profile + permissions, login/logout events, change password
    ├── /api/dashboard   statistics
    ├── /api/lands       land records, land ledger, Pay Land Owner (split funding), land expenses, reversals
    ├── /api/investments personal investment (capital contributions) + customer money available for land
@@ -38,32 +41,35 @@ Node.js (Express)  ── serves built React app (client/dist)
    ├── /api/payments    collections, receipts, reversals
    ├── /api/transfers   ownership transfers + letters
    ├── /api/expenses    expenses + categories
-   ├── /api/documents   uploads linked to customer/plot/land/booking/transfer/expense
+   ├── /api/documents   documents linked to customer/plot/land/booking/transfer/expense (Supabase Storage)
    ├── /api/reports     financial & operational reports (JSON / Excel / PDF)
-   ├── /api/users       user & role management
+   ├── /api/users       staff users: Supabase login + role, disable/enable, password reset
    ├── /api/audit       audit log
-   └── /api/backup      manual/automatic backup, download, restore, data export
+   └── /api/backup      full data export (Excel); database backups are made by Supabase
         │
         ▼
-PostgreSQL  +  storage/uploads (documents)  +  storage/backups
+Supabase: PostgreSQL (transaction pooler)  +  Storage bucket "documents"  +  Auth
 ```
 
 Code layout:
 
 ```
+supabase/schema.sql     the complete database (tables, views, settings, security, storage bucket)
+api/index.js            Vercel serverless function: the Express app
 server/src/
-  index.js              start server + backup scheduler
-  app.js                express app, security headers, routes, SPA fallback
-  config.js             environment settings
-  db/                   pool, migrator, migrations/*.sql, create-admin, demo seed
-  lib/                  money, dates, schedule generator, allocation, permissions, audit, pdf, excel, words
-  middleware/           auth/session, error handler
+  index.js              local development server
+  app.js                express app, security headers (CSP allows the Supabase URL), routes
+  config.js             environment settings (Supabase, database, SSL)
+  db/                   pool, apply-schema (tests / empty databases), check-supabase (read-only setup check)
+  lib/                  money, dates, schedule generator, allocation, permissions, audit, pdf, excel, words,
+                        supabase (token check, Auth admin, Storage)
+  middleware/           auth (Supabase token → FAISAL HOMES user), error handler
   routes/               one file per module
-  services/             booking, payment, transfer, reports, backup (business logic, all inside DB transactions)
+  services/             booking, payment, transfer, land, reports (business logic, all inside DB transactions)
 client/src/
   components/           layout, tables, forms, modals, pickers, documents panel
   pages/                one file per screen
-  lib/                  api client, auth context, formatting
+  lib/                  api client, auth context (Supabase sign-in), supabase client, formatting
   i18n/                 translation dictionaries (English now, Urdu-ready)
 ```
 
@@ -74,9 +80,9 @@ Calculations are done in integer paisa in code, never with floating point.
 
 | Table | Purpose / key columns |
 |---|---|
-| `users` | username, full_name, password_hash (bcrypt), role (ADMIN, ACCOUNTANT, SALES, VIEWER), is_active |
-| `sessions` | hashed token, user, last_seen_at, expires_at (sliding idle timeout) |
-| `settings` | key → JSON value: company, measurement (Marla sq ft, Kanal), number format, late fee, backup, receipt texts |
+| `users` | auth_user_id (the Supabase Auth login), email, full_name, role (ADMIN, ACCOUNTANT, SALES, VIEWER), is_active, must_change_password |
+| `settings` | key → JSON value: company, measurement (Marla sq ft, Kanal), number format, late fee, receipt texts, branding (logo in Storage) |
+| `schema_migrations` | which database files have been run (`001_initial` = `supabase/schema.sql`) |
 | `counters` | gap-free numbering for customers, bookings, receipts, transfers, expenses, refunds, lands (FH-L-), land payments (FH-LP-), investments (FH-INV-) |
 | `lands` | land code, name, location, Kanal/Marla/SqFt entered + total, expected saleable Marla, per-land Marla conversion, rate per Marla, purchase price (automatic = Marla × rate, or manual by admin with reason), purchase date, purchased by, original owner (seller) details, agreement and registry/mutation details, khasra/khewat |
 | `land_price_adjustments` | every change of a land's purchase price: old/new/automatic price, MANUAL or RECALCULATED, reason, user |
@@ -96,10 +102,10 @@ Calculations are done in integer paisa in code, never with floating point.
 | `refunds` | money returned on cancellation |
 | `transfers` | transfer no, booking, plot, from/to customer, date, fee, dues at transfer, override reason, witnesses, approving admin |
 | `ownership_history` | every owner of every plot with start/end dates and how ownership started/ended |
-| `expense_categories` | name + cost type: LAND_PAYMENT (retired in 1.1.0: kept for old records only), PROJECT (capitalised into plot cost) or OPERATING |
+| `expense_categories` | name + cost type: PROJECT (capitalised into plot cost) or OPERATING. Payments to land owners are never expenses |
 | `expenses` | expense no, date, category, description, amount, method, paid to, optional land/society link, entered by, cancel reason |
 | `ledger_entries` | the cash book: every money IN/OUT (payments, reversals, refunds, expenses, expense cancellations, capital contributions, land payments and their reversals); optional land link |
-| `documents` | uploaded files linked to any record (customer, plot, land, booking, transfer, expense, payment) |
+| `documents` | files linked to any record (customer, plot, land, booking, transfer, expense, payment); `stored_name` = path in the Storage bucket |
 | `audit_logs` | who did what and when, with before/after data |
 
 Integrity rules enforced in the database:
@@ -107,6 +113,8 @@ Integrity rules enforced in the database:
 - Plot numbers unique within a block; block names unique within a society; CNIC unique.
 - Money cannot be negative; payment amounts must be positive.
 - Financial rows are never deleted. Payments are **reversed**, expenses and bookings are **cancelled**, each with a reason, user and time.
+- Row level security is on for every table and Supabase's public API roles (`anon`, `authenticated`) have no access: only the
+  server (which connects as the table owner) can read or change data. Views use `security_invoker`.
 
 ## 4. Module relationships
 
@@ -170,7 +178,7 @@ reported as forfeited income; the plot returns to inventory.
 | Realised gross profit | Expected gross profit × (collections ÷ booked sales) — the installment method: profit is recognised only as cash is actually collected |
 | Realised net profit | Realised gross profit + other income (fees, forfeited amounts) − operating expenses |
 | Net cash position | All cash IN − all cash OUT from the ledger |
-| Land payable | Land purchase prices − payments made to owners (`land_payments` of kind PAYMENT + old LAND_PAYMENT expenses from before 1.1.0) |
+| Land payable | Land purchase prices − payments made to owners (`land_payments` of kind PAYMENT) |
 | Total expenses | All active expenses **except** payments to land owners (those are land payments, not expenses) |
 | Personal investment | Valid capital contributions. Used = active allocations; remaining = amount − used. Customer money is never counted here |
 | Customer money used for land | Active CUSTOMER allocations. Never more than the receipt amount (and, for a cancelled booking, never the refunded part) |
@@ -194,11 +202,18 @@ reported as forfeited income; the plot returns to inventory.
 | Expenses | edit + cancel | add/edit | – | view |
 | Reports & exports | ✓ | ✓ | – | ✓ |
 | Documents | upload/view/delete | upload/view | upload/view | – |
-| Users, settings, audit log, backup/restore | ✓ | – | – | – |
+| Users, settings, audit log, data export | ✓ | – | – | – |
 
-Security: bcrypt hashing, httpOnly SameSite cookies, CSRF header check, login lockout after 5 failures, idle session
-timeout (default 30 min, configurable), security headers, uploaded documents served only to logged-in users with permission,
-CNIC masked for viewers, every create/update/cancel/reverse/login/download/backup/restore written to the audit log.
+Security:
+- **Login:** Supabase Auth handles passwords and failed-attempt rate limits. Each API call carries the Supabase access token,
+  which the server verifies with the project's public signing keys (or the legacy secret), and then loads the FAISAL HOMES user:
+  a login without a user, or a disabled user, gets no access. Disabling a user also blocks them in Supabase Auth.
+- **Browser links:** PDF/Excel links and document images cannot send the token header, so the web app mirrors the token into a
+  `SameSite=Strict` cookie limited to `/api`.
+- **Requests:** a CSRF header is required on every change, the app logs out after the idle time set in Settings (default 30 min),
+  and security headers (CSP allowing only this site and the Supabase URL) are sent.
+- **Files and records:** documents are reachable only through 60-second links issued after a permission check. CNICs are masked for
+  viewers. Every create/update/cancel/reverse/login/export is written to the audit log.
 
 ## 8. Development roadmap
 
@@ -209,4 +224,5 @@ CNIC masked for viewers, every create/update/cancel/reverse/login/download/backu
 | 3 | Bookings, payment plans, installments, payments, receipts, reversals, cancellations, refunds, transfers | Done and tested |
 | 4 | Expenses, dashboard, financial reports, Excel/PDF export, backup/restore | Done and tested |
 | 5 | Automated tests, browser testing, deployment guide | Done and tested |
-| 6 (next) | Excel import of existing records, full Urdu translation, drawn site-plan map, SMS gateway, multi-branch | planned |
+| 6 | Move to Supabase (database, Auth, Storage) + Vercel, fresh `schema.sql` | Done and tested (2.0.0) |
+| 7 (next) | Backups/restore inside the app for Supabase, Excel import, full Urdu translation, drawn site-plan map, SMS gateway | planned |

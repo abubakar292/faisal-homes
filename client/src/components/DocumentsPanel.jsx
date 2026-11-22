@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { FileText, Trash2, Upload, Eye } from 'lucide-react';
 import { api } from '../lib/api.js';
+import { getSupabase } from '../lib/supabase.js';
 import { useApi, useRefreshAll } from '../lib/hooks.js';
 import { useAuth } from '../lib/auth.jsx';
 import { dateTime } from '../lib/format.js';
@@ -12,6 +13,10 @@ export const DOC_TYPES = [
   ['OWNERSHIP_DOCUMENT', 'Ownership Document'], ['EXPENSE_RECEIPT', 'Expense Receipt / Bill'], ['LEGAL_DOCUMENT', 'Legal Document'], ['OTHER', 'Other'],
 ];
 const label = (k) => Object.fromEntries(DOC_TYPES)[k] || k;
+// Windows sometimes leaves the file type empty (e.g. Word/Excel files): fall back to the extension.
+const MIME_BY_EXT = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', pdf: 'application/pdf',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
 
 export default function DocumentsPanel({ entityType, entityId, types, title = 'Documents', compact }) {
   const { can } = useAuth();
@@ -27,13 +32,22 @@ export default function DocumentsPanel({ entityType, entityId, types, title = 'D
   const fileRef = useRef();
   if (!can('document.view')) return null;
   const options = DOC_TYPES.filter(([k]) => !types || types.includes(k));
+  // 1. the server checks permission and file type and returns a one-time upload link,
+  // 2. the file goes straight to Supabase Storage, 3. the server records it.
   const upload = async () => {
     const f = fileRef.current?.files?.[0];
     if (!f) { setErr(new Error('Choose a file first')); return; }
-    const fd = new FormData();
-    fd.append('entity_type', entityType); fd.append('entity_id', String(entityId)); fd.append('doc_type', docType); fd.append('title', docTitle); fd.append('file', f);
+    const mime = f.type || MIME_BY_EXT[(f.name.split('.').pop() || '').toLowerCase()] || '';
     setBusy(true); setErr(null);
-    try { await api.upload('/documents', fd); toast('Document uploaded'); fileRef.current.value = ''; setDocTitle(''); refresh(); } catch (e) { setErr(e); } finally { setBusy(false); }
+    try {
+      const link = { entity_type: entityType, entity_id: entityId, doc_type: docType };
+      const u = await api.post('/documents/upload-url', { ...link, file_name: f.name, mime_type: mime, size: f.size });
+      const sb = await getSupabase();
+      const { error } = await sb.storage.from(u.bucket).uploadToSignedUrl(u.path, u.token, await f.arrayBuffer(), { contentType: mime });
+      if (error) throw new Error(`Upload failed: ${error.message}`);
+      await api.post('/documents', { ...link, title: docTitle, original_name: f.name, stored_name: u.path });
+      toast('Document uploaded'); fileRef.current.value = ''; setDocTitle(''); refresh();
+    } catch (e) { setErr(e); } finally { setBusy(false); }
   };
   return (
     <Card title={title} bodyClass={compact ? 'p-3' : 'p-4 sm:p-5'}>

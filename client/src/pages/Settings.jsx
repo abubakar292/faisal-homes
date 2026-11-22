@@ -94,14 +94,6 @@ export default function SettingsPage() {
             </div>
           )}
         </Section>
-        <Section title="Automatic backup" desc="A full backup (database + documents) is made every day at this time. If the computer was off, a catch-up backup is made when FAISAL HOMES starts." onSave={save('backup')}>
-          <Checkbox label="Automatic daily backup" checked={s.backup.auto_enabled} onChange={set('backup', 'auto_enabled')} />
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <Input label="Backup time (24-hour)" type="time" value={s.backup.time} onChange={set('backup', 'time')} />
-            <Input label="Automatic backups to keep" inputMode="numeric" value={s.backup.retention_count} onChange={set('backup', 'retention_count')} />
-          </div>
-          <Notice className="mt-3">Backup folder: <code className="text-xs">{s._paths.backupDir}</code>{s._paths.backupCopyDir ? <> · copy to <code className="text-xs">{s._paths.backupCopyDir}</code></> : <> · Tip: set BACKUP_COPY_DIR in the .env file to a Google Drive / USB folder for an off-site copy.</>}</Notice>
-        </Section>
         <Section title="Receipts & letters" onSave={save('receipt')}>
           <div className="space-y-3">
             <Input label="Signature label" value={s.receipt.signature_label} onChange={set('receipt', 'signature_label')} />
@@ -110,7 +102,7 @@ export default function SettingsPage() {
           </div>
         </Section>
         <Card title="Expense categories" className="lg:col-span-2" actions={<button type="button" className="btn-primary btn-sm" onClick={() => { setCat({ name: '', cost_type: 'OPERATING', is_active: true }); setCatErr(null); }}><Plus className="h-4 w-4" />Add category</button>}>
-          <p className="-mt-1 mb-3 text-sm text-slate-500">Cost type controls profit: <b>Land payment</b> = paid to land seller · <b>Project cost</b> = development cost spread over plots (cost per Marla) · <b>Operating</b> = office/marketing costs deducted from profit.</p>
+          <p className="-mt-1 mb-3 text-sm text-slate-500">Cost type controls profit: <b>Project cost</b> = development cost spread over plots (cost per Marla) · <b>Operating</b> = office/marketing costs deducted from profit. Payments to land owners are not expenses: use <b>Pay Land Owner</b> on the land page.</p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {(cats || []).map((c) => (
               <button type="button" key={c.id} onClick={() => { setCat(c); setCatErr(null); }} className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm hover:bg-slate-50 ${c.is_active ? '' : 'opacity-50'}`}>
@@ -123,7 +115,7 @@ export default function SettingsPage() {
       <Modal open={!!cat} onClose={() => setCat(null)} title={cat?.id ? 'Edit category' : 'New category'} size="sm" footer={<><button type="button" className="btn-secondary" onClick={() => setCat(null)}>Cancel</button><button form="cat" className="btn-primary">Save</button></>}>
         {cat && <form id="cat" onSubmit={saveCat} className="space-y-3">
           <Input label="Name" required value={cat.name} onChange={(e) => setCat({ ...cat, name: e.target.value })} />
-          <Select label="Cost type" value={cat.cost_type} onChange={(e) => setCat({ ...cat, cost_type: e.target.value })} options={[['LAND_PAYMENT', 'Land payment'], ['PROJECT', 'Project cost'], ['OPERATING', 'Operating expense']]} />
+          <Select label="Cost type" value={cat.cost_type} onChange={(e) => setCat({ ...cat, cost_type: e.target.value })} options={[['PROJECT', 'Project cost'], ['OPERATING', 'Operating expense']]} />
           <Checkbox label="Active" checked={cat.is_active} onChange={(v) => setCat({ ...cat, is_active: v })} />
           <ErrorBox error={catErr} />
         </form>}

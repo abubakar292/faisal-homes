@@ -1,4 +1,8 @@
 node_modules/
-storage/
 .env
+.env.*
+!.env.example
 *.log
+# Built by Vercel (npm run build in client/) on every deployment
+client/dist/
+.vercel/

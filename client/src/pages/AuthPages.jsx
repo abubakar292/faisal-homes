@@ -38,31 +38,32 @@ function Shell({ children }) {
 }
 
 export function LoginPage() {
-  const { login, setup, notice } = useAuth();
+  const { login, setup, notice, configError } = useAuth();
   const [needsSetup, setNeedsSetup] = useState(null);
-  const [f, setF] = useState({ username: '', password: '', full_name: '', confirm: '' });
+  const [f, setF] = useState({ email: '', password: '', full_name: '', confirm: '' });
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { api.get('/auth/setup-status').then((d) => setNeedsSetup(d.needsSetup)).catch(() => setNeedsSetup(false)); }, []);
+  useEffect(() => { api.get('/auth/setup-status').then((d) => setNeedsSetup(d.needsSetup)).catch((e) => { setErr(e); setNeedsSetup(false); }); }, []);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const submit = async (e) => {
     e.preventDefault(); setErr(null); setBusy(true);
     try {
       if (needsSetup) {
         if (f.password !== f.confirm) throw new Error('Passwords do not match');
-        await setup({ username: f.username, full_name: f.full_name, password: f.password });
-      } else await login(f.username, f.password);
+        await setup({ email: f.email, full_name: f.full_name, password: f.password });
+      } else await login(f.email, f.password);
     } catch (ex) { setErr(ex); } finally { setBusy(false); }
   };
   if (needsSetup === null) return <Shell><Spinner /></Shell>;
   return (
     <Shell>
       <h1 className="text-2xl font-bold text-navy-900">{needsSetup ? 'Create administrator' : 'Sign in'}</h1>
-      <p className="mb-6 mt-1 text-sm text-slate-500">{needsSetup ? 'First-time setup: create the main admin account.' : 'Enter your username and password.'}</p>
+      <p className="mb-6 mt-1 text-sm text-slate-500">{needsSetup ? 'First-time setup: create the main admin account.' : 'Enter your email and password.'}</p>
+      {configError && <ErrorBox error={configError} className="mb-4" />}
       {notice && !needsSetup && <Notice tone="warn" className="mb-4">{notice}</Notice>}
       <form onSubmit={submit} className="space-y-4">
         {needsSetup && <Input label="Full name" required value={f.full_name} onChange={set('full_name')} />}
-        <Input label="Username" required autoFocus autoComplete="username" value={f.username} onChange={set('username')} />
+        <Input label="Email" type="email" required autoFocus autoComplete="username" value={f.email} onChange={set('email')} />
         <Input label="Password" type="password" required autoComplete={needsSetup ? 'new-password' : 'current-password'} value={f.password} onChange={set('password')} hint={needsSetup ? 'At least 8 characters' : undefined} />
         {needsSetup && <Input label="Confirm password" type="password" required value={f.confirm} onChange={set('confirm')} />}
         <ErrorBox error={err} />

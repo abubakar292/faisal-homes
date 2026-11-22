@@ -1,12 +1,7 @@
 'use strict';
-// Module 1: Land Purchase Management. Starts from a database created by the PREVIOUS version (migrations 001-004)
-// that already contains a land and seller payments, then runs the real upgrade and tests the new land features.
-process.env.TEST_DB_SUFFIX = '_land';
+// Module 1: Land Purchase Management on a fresh Supabase-style database (supabase/schema.sql).
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const bcrypt = require('bcryptjs');
 const { startServer, stopServer } = require('./helpers');
 const { today, addDays } = require('../src/lib/dates');
 
@@ -17,64 +12,46 @@ const ids = {};
 const ok = (r, code = 200) => { assert.equal(r.status, code, JSON.stringify(r.data).slice(0, 500)); return r.data; };
 const num = (v) => Number(v);
 
-async function legacySeed(db) {
-  const hash = await bcrypt.hash('Admin@12345', 4);
-  await db.query(`INSERT INTO users (username, full_name, password_hash, role) VALUES ('admin','Admin',$1,'ADMIN')`, [hash]);
-  await db.query(`INSERT INTO lands (name, location, area_kanal, area_marla, area_sqft, marla_sqft, kanal_marla, total_sqft, total_marla, purchase_price, purchase_date,
-      seller_name, seller_mobile, created_by, updated_by)
-    VALUES ('Old Land', 'Mauza Old', 2, 0, 0, 272.25, 20, 10890, 40, 10000000, $1, 'Old Owner', '0300-0000001', 1, 1)`, [D(300)]);
-  const cat = async (n) => (await db.query('SELECT id FROM expense_categories WHERE name=$1', [n])).rows[0].id;
-  for (const [no, c, desc, amt, d] of [['FH-E-00001', 'Land Purchase', 'Seller payment (old way)', 4000000, D(290)], ['FH-E-00002', 'Legal Expenses', 'Registry fee', 200000, D(289)]]) {
-    const e = (await db.query(`INSERT INTO expenses (expense_no, expense_date, category_id, description, amount, method, land_id, created_by, updated_by)
-      VALUES ($1,$2,$3,$4,$5,'CASH',1,1,1) RETURNING id`, [no, d, await cat(c), desc, amt])).rows[0];
-    await db.query(`INSERT INTO ledger_entries (entry_date, entry_type, direction, amount, method, source_type, source_id, reference, description, created_by)
-      VALUES ($1,'EXPENSE_PAID','OUT',$2,'CASH','expense',$3,$4,$5,1)`, [d, amt, e.id, no, desc]);
-  }
-  await db.query(`UPDATE counters SET next_value = 3 WHERE name = 'expense'`);
-}
-
 before(async () => {
-  ctx = await startServer({ legacy: { upTo: '004_land_saleable_area.sql', seed: legacySeed } });
+  ctx = await startServer();
   admin = ctx.api(); acct = ctx.api(); viewer = ctx.api();
-  ok(await admin.post('/auth/login', { username: 'admin', password: 'Admin@12345' }));
-  ok(await admin.post('/users', { username: 'acct', full_name: 'Accountant', role: 'ACCOUNTANT', password: 'Passw0rd!' }), 201);
-  ok(await admin.post('/users', { username: 'viewer', full_name: 'Viewer', role: 'VIEWER', password: 'Passw0rd!' }), 201);
-  ok(await acct.post('/auth/login', { username: 'acct', password: 'Passw0rd!' }));
-  ok(await viewer.post('/auth/login', { username: 'viewer', password: 'Passw0rd!' }));
+  ok(await admin.post('/auth/setup', { email: 'admin@fh.test', full_name: 'Admin', password: 'Admin@12345' }), 201);
+  ok(await admin.login('admin@fh.test', 'Admin@12345'));
+  ok(await admin.post('/users', { email: 'acct@fh.test', full_name: 'Accountant', role: 'ACCOUNTANT', password: 'Passw0rd!' }), 201);
+  ok(await admin.post('/users', { email: 'viewer@fh.test', full_name: 'Viewer', role: 'VIEWER', password: 'Passw0rd!' }), 201);
+  ok(await acct.login('acct@fh.test', 'Passw0rd!'));
+  ok(await viewer.login('viewer@fh.test', 'Passw0rd!'));
+  // An earlier land: 2 Kanal at Rs 250,000 per Marla, with its registry fee entered in Expenses.
+  const old = ok(await admin.post('/lands', { name: 'Old Land', location: 'Mauza Old', area_kanal: 2, rate_per_marla: 250000, purchase_date: D(300),
+    seller_name: 'Old Owner', seller_mobile: '0300-0000001', purchased_by: 'Faisal' }), 201);
+  const legal = ok(await admin.get('/expenses/categories')).find((c) => c.name === 'Legal Expenses');
+  ok(await admin.post('/expenses', { expense_date: D(289), category_id: legal.id, description: 'Registry fee', amount: 200000, method: 'CASH', land_id: old.id }), 201);
+  ids.old = old.id;
 });
-after(async () => { await stopServer(ctx.server); });
+after(async () => { await stopServer(ctx); });
 
 const fin = async (id) => ok(await admin.get(`/lands/${id}`));
 const funds = async (bookingId) => ok(await acct.get(`/investments/customer-funds?booking_id=${bookingId}`));
 
-describe('upgrade of an existing database', () => {
-  it('made a safety backup before applying the upgrade', () => {
-    const files = fs.readdirSync(path.join(ctx.storage, 'backups'));
-    assert.ok(files.some((f) => /-pre-migration\.zip$/.test(f)), files.join(','));
+describe('fresh database', () => {
+  it('has no "Land Purchase" expense category: owners are paid with Pay Land Owner', async () => {
+    const cats = ok(await admin.get('/expenses/categories'));
+    assert.ok(cats.some((c) => c.name === 'Land Purchase Expenses' && c.cost_type === 'PROJECT'));
+    assert.ok(!cats.some((c) => c.cost_type === 'LAND_PAYMENT'));
   });
-  it('keeps the old land, its exact price and its old seller payments', async () => {
-    const l = await fin(1);
+  it('shows an earlier land with its price, expense and unpaid balance', async () => {
+    const l = await fin(ids.old);
     assert.equal(l.land_code, 'FH-L-00001');
     assert.equal(num(l.purchase_price), 10000000);
     assert.equal(num(l.rate_per_marla), 250000);
-    assert.equal(l.price_is_manual, true);
-    assert.equal(num(l.total_paid), 4000000);
-    assert.equal(num(l.remaining_payable), 6000000);
+    assert.equal(l.price_is_manual, false);
+    assert.equal(num(l.total_paid), 0);
+    assert.equal(num(l.remaining_payable), 10000000);
     assert.equal(num(l.extra_cost), 200000);
     assert.equal(num(l.total_investment), 10200000);
-    const led = ok(await admin.get('/lands/1/ledger'));
-    const legacy = led.rows.find((r) => r.txn_id === 'FH-E-00001');
-    assert.match(legacy.description, /before upgrade/);
-    assert.match(legacy.source, /Not recorded/);
-    assert.equal(led.rows.at(-1).remaining_payable, 6000000);
-  });
-  it('retires the old "Land Purchase" expense category but keeps its records', async () => {
-    const cats = ok(await admin.get('/expenses/categories'));
-    const lp = cats.find((c) => c.name === 'Land Purchase');
-    assert.equal(lp.is_active, false);
-    assert.equal((await admin.post('/expenses', { expense_date: T, category_id: lp.id, description: 'x', amount: 1, method: 'CASH', land_id: 1 })).status, 400);
-    const ex = ok(await admin.get('/expenses?land_id=1'));
-    assert.equal(ex.length, 2);
+    const led = ok(await admin.get(`/lands/${ids.old}/ledger`));
+    assert.equal(led.rows.at(-1).remaining_payable, 10000000);
+    assert.ok(led.rows.some((r) => r.type === 'EXPENSE' && /Registry fee/.test(r.description)));
   });
 });
 
@@ -272,7 +249,7 @@ describe('reversals and investment tracking', () => {
     close(s.customer_used_land_purchase, 500000);
     close(s.land_payments_unreconciled, 0);
     close(s.land_payments_funded, s.land_payments_total);
-    close(s.legacy_land_payments_no_source, 4000000);
+    close(s.legacy_land_payments_no_source, 0);
     const sum = ok(await admin.get('/lands/summary'));
     close(sum.total_personal_investment, 6350000);
     close(sum.total_customer_money_used, 500000);
@@ -306,7 +283,7 @@ describe('ledgers, summary, reports', () => {
     assert.ok(led.rows.some((r) => r.type === 'ADDITIONAL'));
     assert.ok(led.rows.filter((r) => /Customer money/.test(r.source)).length >= 1);
   });
-  it('financial summary counts old and new land payments without counting them as expenses', async () => {
+  it('financial summary counts land payments without counting them as expenses', async () => {
     const f = ok(await admin.get('/reports/summary')).raw;
     const lands = ok(await admin.get('/lands'));
     const paid = lands.reduce((a, l) => a + num(l.total_paid), 0);

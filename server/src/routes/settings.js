@@ -1,12 +1,10 @@
 'use strict';
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
-const config = require('../config');
 const { pool, withTx } = require('../db/pool');
 const { requirePerm } = require('../middleware/auth');
 const settings = require('../lib/settings');
+const supa = require('../lib/supabase');
 const { audit } = require('../lib/audit');
 const { badRequest } = require('../lib/errors');
 const { z, parse, bool } = require('../lib/validate');
@@ -29,11 +27,6 @@ const SCHEMAS = {
   security: z.object({ session_timeout_minutes: num('Session timeout', 5, 1440) }),
   late_fee: z.object({ enabled: bool, mode: z.enum(['FIXED', 'PERCENT']), value: num('Late fee value', 0, 100000000), grace_days: num('Grace days', 0, 365) }),
   installments: z.object({ default_rounding: z.coerce.number().refine((n) => [1, 10, 100, 500, 1000, 5000].includes(n), 'Invalid rounding') }),
-  backup: z.object({
-    auto_enabled: bool,
-    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Backup time must be HH:MM (24-hour)'),
-    retention_count: num('Number of backups to keep', 3, 365),
-  }),
   receipt: z.object({
     footer_note: z.string().max(400).optional().default(''),
     signature_label: z.string().max(60).optional().default('Authorized Signature'),
@@ -42,8 +35,7 @@ const SCHEMAS = {
 };
 
 router.get('/', requirePerm('settings.manage'), async (_req, res) => {
-  const all = await settings.getAll(pool);
-  res.json({ ...all, backup_state: undefined, _paths: { backupDir: config.backupDir, backupCopyDir: config.backupCopyDir, uploadDir: config.uploadDir } });
+  res.json(await settings.getAll(pool));
 });
 
 router.put('/', requirePerm('settings.manage'), async (req, res) => {
@@ -70,28 +62,42 @@ const logoUpload = multer({
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => cb(null, /^image\/(png|jpeg)$/.test(file.mimetype)),
 });
+
+// The company logo is kept in Supabase Storage (branding/logo.png or .jpg); settings.branding points to it.
+async function saveBranding(req, value) {
+  await pool.query(`INSERT INTO settings (key, value, updated_at, updated_by) VALUES ('branding', $1, now(), $2)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`, [JSON.stringify(value), req.user.id]);
+  settings.invalidate();
+}
 router.post('/logo', requirePerm('settings.manage'), logoUpload.single('file'), async (req, res) => {
   if (!req.file) throw badRequest('Upload a PNG or JPG image (max 2 MB)');
-  const dir = path.join(config.uploadDir, 'branding');
-  fs.mkdirSync(dir, { recursive: true });
-  for (const f of fs.readdirSync(dir)) if (f.startsWith('logo.')) fs.unlinkSync(path.join(dir, f));
+  const before = await settings.get('branding', pool);
   const ext = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
-  fs.writeFileSync(path.join(dir, `logo.${ext}`), req.file.buffer);
+  const logoPath = `branding/logo.${ext}`;
+  await supa.uploadObject(logoPath, req.file.buffer, req.file.mimetype);
+  if (before.logo_path && before.logo_path !== logoPath) await supa.removeObjects([before.logo_path]);
+  await saveBranding(req, { logo_path: logoPath, logo_mime: req.file.mimetype, logo_version: (Number(before.logo_version) || 0) + 1 });
   await audit(null, req, { action: 'UPDATE', entity: 'settings', entityId: 'logo', summary: 'Company logo uploaded' });
   res.json({ ok: true });
 });
 router.delete('/logo', requirePerm('settings.manage'), async (req, res) => {
-  const dir = path.join(config.uploadDir, 'branding');
-  if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir)) if (f.startsWith('logo.')) fs.unlinkSync(path.join(dir, f));
+  const before = await settings.get('branding', pool);
+  if (before.logo_path) await supa.removeObjects([before.logo_path]);
+  await saveBranding(req, { logo_path: null, logo_mime: null, logo_version: (Number(before.logo_version) || 0) + 1 });
   await audit(null, req, { action: 'DELETE', entity: 'settings', entityId: 'logo', summary: 'Company logo removed' });
   res.json({ ok: true });
 });
 
 // Expense categories are configured from settings too (cost type drives profit calculation).
+// Payments to land owners are not an expense category: they are recorded with Pay Land Owner.
 router.get('/expense-categories', async (_req, res) => {
   res.json((await pool.query('SELECT * FROM expense_categories ORDER BY sort_order, name')).rows);
 });
-const catSchema = z.object({ name: z.string().trim().min(2, 'Category name is required').max(60), cost_type: z.enum(['LAND_PAYMENT', 'PROJECT', 'OPERATING']), is_active: bool.default(true) });
+const catSchema = z.object({
+  name: z.string().trim().min(2, 'Category name is required').max(60),
+  cost_type: z.enum(['PROJECT', 'OPERATING'], { errorMap: () => ({ message: 'Choose Project cost or Operating expense (payments to land owners use Pay Land Owner)' }) }),
+  is_active: bool.default(true),
+});
 router.post('/expense-categories', requirePerm('settings.manage'), async (req, res) => {
   const b = parse(catSchema, { is_active: true, ...req.body });
   const row = await withTx(async (c) => {

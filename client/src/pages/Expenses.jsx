@@ -86,7 +86,7 @@ export default function ExpensesPage() {
   ];
   return (
     <>
-      <PageHeader title="Expenses" subtitle="Land payments, development and office expenses"
+      <PageHeader title="Expenses" subtitle="Development, construction and office expenses. Payments to land owners are made with Pay Land Owner on the land page."
         actions={<><ExportButtons report={tab === 'list' ? 'expense-list' : 'expenses'} params={{ from: f.from, to: f.to, group }} />
           {can('expense.edit') && <button type="button" className="btn-primary" onClick={() => setForm({})}><Plus className="h-4 w-4" />Add expense</button>}</>} />
       <Tabs active={tab} onChange={setTab} tabs={[['list', 'Expense list'], ['summary', 'Daily / monthly / yearly report']]} />
