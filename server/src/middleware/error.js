@@ -13,8 +13,33 @@ const UNIQUE_MESSAGES = {
   expense_categories_name_uq: 'This category already exists',
 };
 
+/**
+ * Plain-language reason when the database cannot be used at all (wrong or missing DATABASE_URL, password,
+ * SSL, tables not created). No host names or passwords are included. Returns null for ordinary errors.
+ */
+function databaseProblem(err) {
+  const code = err?.code || err?.errors?.[0]?.code || '';
+  const msg = String(err?.message || '');
+  if (['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH', 'ETIMEDOUT', 'ECONNRESET'].includes(code)) {
+    if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) return 'DATABASE_URL is not set on the server (Vercel → Settings → Environment Variables), then redeploy';
+    return `cannot connect to the database host (${code}). Use the Supabase "Transaction pooler" connection string (port 6543), not the direct db.…supabase.co address`;
+  }
+  if (code === '28P01' || /password authentication failed/i.test(msg)) return 'the database password in DATABASE_URL is wrong (special characters must be URL-encoded: @ → %40, # → %23, / → %2F)';
+  if (/tenant or user not found/i.test(msg)) return 'the user name in DATABASE_URL is wrong: it must be postgres.<your-project-ref>, copied from Supabase → Connect → Transaction pooler';
+  if (code === '3D000') return 'the database name in DATABASE_URL is wrong (it should end with /postgres)';
+  if (/certificate|SSL|self.signed/i.test(`${code} ${msg}`)) return `SSL problem (${code || 'certificate'}): remove DATABASE_CA_CERT or paste the full Supabase certificate`;
+  if (code === '42P01' && /relation "(settings|users|counters)" does not exist/.test(msg)) return 'the tables do not exist yet: run supabase/schema.sql in the Supabase SQL Editor';
+  if (/timeout exceeded when trying to connect|Connection terminated/i.test(msg)) return 'the database did not answer in time. Check DATABASE_URL (Transaction pooler, port 6543) and that the Supabase project is not paused';
+  return null;
+}
+
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, _next) {
+  const db = databaseProblem(err);
+  if (db) {
+    console.error('[database]', req.method, req.originalUrl, err?.code || '', err?.message || err);
+    return res.status(503).json({ error: `The database cannot be used: ${db}.`, code: 'DATABASE_UNAVAILABLE' });
+  }
   if (err instanceof ZodError) {
     const first = err.issues[0];
     const field = first?.path?.join('.') || '';

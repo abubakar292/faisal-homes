@@ -38,7 +38,12 @@ function createApp() {
   const api = express.Router();
   api.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   api.use(csrfGuard);
-  api.get('/health', (_req, res) => res.json({ ok: true }));
+  // /api/health?db=1 also checks the database (connection, password, tables); errors explain what to fix.
+  api.get('/health', async (req, res) => {
+    if (!req.query.db) return res.json({ ok: true });
+    const r = await require('./db/pool').pool.query("SELECT current_setting('TimeZone') AS timezone, (SELECT string_agg(name, ',') FROM schema_migrations) AS schema");
+    res.json({ ok: true, database: 'connected', ...r.rows[0] });
+  });
   api.use('/public', require('./routes/public'));
   api.use(loadUser);
   api.use('/auth', require('./routes/auth'));
