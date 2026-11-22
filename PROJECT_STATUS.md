@@ -19,6 +19,8 @@ Also in 2.0.0:
 - The old "Land Purchase" expense type no longer exists: payments to land owners can only be made with Pay Land Owner (this also
   closes the gap where an admin could create such a category and bypass the land ledger).
 - `npm run check`: read-only check of a Supabase setup.
+- One package for the whole project (`package.json` at the top, one `npm install`), so Vercel builds it from the repository root
+  with its standard Vite preset.
 
 Removed: `INSTALL-FAISAL-HOMES.bat`, `start-windows.bat`, `Dockerfile`, `docker-compose.yml`, the 5 old migration files, the backup
 service, `create-admin.js`, the demo seed and the old headless-browser smoke test (it used the old username login). All of them are

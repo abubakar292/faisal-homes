@@ -3,6 +3,6 @@ node_modules/
 .env.*
 !.env.example
 *.log
-# Built by Vercel (npm run build in client/) on every deployment
-client/dist/
+# Built by Vercel (npm run build) on every deployment
+dist/
 .vercel/

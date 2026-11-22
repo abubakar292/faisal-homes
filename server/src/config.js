@@ -50,5 +50,5 @@ module.exports = {
   supabaseJwtSecret: env('SUPABASE_JWT_SECRET') || '',
   storageBucket: env('STORAGE_BUCKET') || 'documents',
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 10),
-  clientDist: path.join(root, 'client', 'dist'),
+  clientDist: path.join(root, 'dist'),
 };

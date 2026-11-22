@@ -21,7 +21,7 @@ installment plans → payments & receipts → transfers → expenses → financi
 ## Local development
 ```
 cp .env.example .env          # fill in your Supabase values
-npm run install:all           # installs server and client
+npm install                   # one install for everything
 npm run check                 # read-only check of the Supabase setup
 npm run dev                   # API on http://localhost:4000
 npm run dev:client            # web app on http://localhost:5173 (talks to the API above)
@@ -67,9 +67,11 @@ Excel file. Keep a copy off-site.
 
 ## Project layout
 ```
+package.json         the only package file: all dependencies and scripts
 supabase/schema.sql  the complete database: run once in the Supabase SQL Editor
 api/index.js         Vercel serverless function (the Express API)
 server/              Node.js + Express API, business services, PDF/Excel, Supabase Auth + Storage, tests
-client/              React + Tailwind web app (Vercel builds it into client/dist)
+client/              React + Tailwind web app source (index.html, src/, public/)
+vite.config.mjs      web app build: client/ → dist/ (Vercel runs it on every deployment)
 vercel.json          Vercel build, function and routing settings
 ```

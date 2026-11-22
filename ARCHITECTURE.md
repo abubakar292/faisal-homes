@@ -27,7 +27,7 @@ Browser (staff PCs, tablets, phones)
    │  sign-in + file uploads ───────────────►  Supabase Auth / Supabase Storage
    │  HTTPS, Authorization: Bearer <Supabase access token>
    ▼
-Vercel ── static React app (client/dist)
+Vercel ── static React app (dist/, built from client/)
    └── /api/*  → serverless function api/index.js (Express)
    ├── /api/public      branding, logo, public Supabase settings (URL + publishable key)
    ├── /api/auth        first-time setup, profile + permissions, login/logout events, change password
@@ -54,6 +54,8 @@ Supabase: PostgreSQL (transaction pooler)  +  Storage bucket "documents"  +  Aut
 Code layout:
 
 ```
+package.json            one package for the whole project (server + web app dependencies, scripts)
+vite.config.mjs         web app build (client/ → dist/), Tailwind settings in tailwind.config.cjs
 supabase/schema.sql     the complete database (tables, views, settings, security, storage bucket)
 api/index.js            Vercel serverless function: the Express app
 server/src/

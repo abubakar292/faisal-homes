@@ -51,7 +51,9 @@ If the database password contains special characters, URL-encode them in `DATABA
 
 ## 5. Deploy on Vercel
 1. Go to https://vercel.com → **Add New → Project** → import the GitHub repository.
-2. Leave the build settings as they are: `vercel.json` sets the install command, the build (`client/dist`) and the API function.
+2. **Root Directory must be the top of the repository (`./`). Do not choose `client` or `server`.** Framework Preset: **Vite**
+   (detected automatically). Leave the build and install commands empty: `vercel.json` sets the build (`dist/`) and the API function.
+   If the project already exists: Project → Settings → Build and Deployment → Root Directory → clear it (or `./`) → Save.
 3. Under **Environment Variables**, add `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, and
    `APP_TIMEZONE=Asia/Karachi` (plus `DATABASE_CA_CERT` if you use it).
 4. Click **Deploy**. Every push to the main branch deploys again automatically.
@@ -66,7 +68,7 @@ If the database password contains special characters, URL-encode them in `DATABA
 ## 7. Check the setup (optional)
 On a PC with this project: copy `.env.example` to `.env`, fill in the same values, then run
 ```
-npm run install:all
+npm install
 npm run check
 ```
 It only reads: it confirms the database connection, Pakistan time, the tables, that the tables are locked against the public API,
@@ -76,7 +78,8 @@ the private storage bucket, Supabase Auth and the secret key. It changes nothing
 
 ## Local development
 1. `.env` with your Supabase values (use a separate Supabase project for development if you do not want test data in the real one).
-2. `npm run install:all`, then `npm run dev` (API on port 4000) and `npm run dev:client` (web app on http://localhost:5173).
+2. `npm install`, then `npm run dev` (API on port 4000) and, in a second window, `npm run dev:client` (web app on http://localhost:5173).
+   `npm run build` makes the production web app in `dist/`; `npm start` then serves both on port 4000.
 3. Automatic tests: `npm test`. They start a temporary PostgreSQL 17 and a stand-in for Supabase Auth and Storage on the PC, so they
    never touch your Supabase project. On Windows the PostgreSQL test binaries need the Microsoft Visual C++ 2015-2022 runtime
    (installed with most PCs; if `npm test` stops with a missing DLL error, install "Microsoft Visual C++ Redistributable x64").

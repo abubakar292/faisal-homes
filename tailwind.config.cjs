@@ -1,6 +1,8 @@
+const path = require('path');
+
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+module.exports = {
+  content: [path.join(__dirname, 'client/index.html'), path.join(__dirname, 'client/src/**/*.{js,jsx}')],
   theme: {
     extend: {
       fontFamily: { sans: ['Inter', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'] },
