@@ -1,0 +1,32 @@
+# VPS / Linux server deployment:  docker compose up -d
+# Change POSTGRES_PASSWORD (both places) before first start.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: faisal
+      POSTGRES_PASSWORD: change-this-strong-password
+      POSTGRES_DB: faisal_homes
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U faisal -d faisal_homes"]
+      interval: 5s
+      retries: 20
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://faisal:change-this-strong-password@db:5432/faisal_homes
+      APP_TIMEZONE: Asia/Karachi
+      COOKIE_SECURE: "true"      # set to "false" if you open it over plain http
+    volumes:
+      - appdata:/data            # uploaded documents + backups
+    ports:
+      - "127.0.0.1:4000:4000"    # put Caddy/Nginx with HTTPS in front (see DEPLOYMENT.md)
+volumes:
+  pgdata:
+  appdata:
