@@ -117,6 +117,7 @@ const sourceSchema = z.object({
   reference_no: optText,
   notes: optText,
   capital_id: optId,
+  investor_id: optId,
   payment_id: optId,
   customer_id: optId,
   booking_id: optId,

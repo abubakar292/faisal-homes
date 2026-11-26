@@ -313,3 +313,46 @@ describe('ledgers, summary, reports', () => {
     assert.equal((await viewer.post('/investments', { investor_name: 'x', contribution_date: T, amount: 1, method: 'CASH' })).status, 403);
   });
 });
+
+describe('investors (added without an amount, chosen in Pay Land Owner)', () => {
+  it('adds an investor with only name, date and notes, and no money moves', async () => {
+    const cashBefore = ok(await admin.get(`/reports/daily-cash?date=${D(2)}`)).rows.length;
+    const inv = ok(await acct.post('/investments/investors', { name: 'Haji Salman', added_date: D(2), notes: 'Brother-in-law' }), 201);
+    assert.equal(inv.name, 'Haji Salman');
+    assert.equal(inv.amount, undefined, 'an investor has no amount');
+    ids.salman = inv.id;
+    assert.equal(ok(await admin.get(`/reports/daily-cash?date=${D(2)}`)).rows.length, cashBefore, 'adding an investor is not a cash entry');
+    assert.equal((await acct.post('/investments/investors', { name: 'haji salman', added_date: T })).status, 409);
+    assert.equal((await acct.post('/investments/investors', { name: '', added_date: T })).status, 400);
+    assert.equal((await acct.post('/investments/investors', { name: 'Future', added_date: addDays(T, 2) })).status, 400);
+    assert.equal((await viewer.post('/investments/investors', { name: 'Viewer Try', added_date: T })).status, 403);
+    const list = ok(await viewer.get('/investments/investors'));
+    const row = list.find((x) => x.id === ids.salman);
+    assert.equal(num(row.invested), 0);
+    assert.equal(row.entries, 0);
+    // the old way of adding an amount is gone from the screen; customers' money is unaffected
+    assert.ok(list.every((x) => x.name !== 'Viewer Try'));
+  });
+  it('pays a land owner from the investor chosen in the list; the amount is entered there', async () => {
+    const before = await fin(ids.C);
+    const body = { amount: 100000, payment_date: T, method: 'CASH', description: 'Paid with Haji Salman money' };
+    assert.equal((await acct.post(`/lands/${ids.C}/payments`, { ...body, sources: [{ type: 'PERSONAL_NEW', amount: 100000 }] })).status, 400, 'investor must be chosen');
+    assert.equal((await acct.post(`/lands/${ids.C}/payments`, { ...body, sources: [{ type: 'PERSONAL_NEW', amount: 100000, investor_id: 999999 }] })).status, 400, 'unknown investor');
+    const r = ok(await acct.post(`/lands/${ids.C}/payments`, { ...body, sources: [{ type: 'PERSONAL_NEW', amount: 100000, investor_id: ids.salman }] }), 201);
+    assert.equal(r.created.length, 1);
+    assert.equal(r.created[0].investor_name, 'Haji Salman');
+    assert.equal(r.created[0].investor_id, ids.salman);
+    assert.equal(num(r.created[0].amount), 100000);
+    const after = await fin(ids.C);
+    assert.equal(num(after.remaining_payable), num(before.remaining_payable) - 100000);
+    assert.match(after.payments[0].funding, /Haji Salman/);
+    const row = ok(await acct.get('/investments/investors')).find((x) => x.id === ids.salman);
+    assert.equal(num(row.invested), 100000);
+    assert.equal(num(row.available), 0);
+    assert.equal(row.entries, 1);
+    // a typed name (Add Land form) is still accepted and linked to the investor with that name
+    const e = ok(await admin.post(`/lands/${ids.C}/expenses`, { description: 'Survey', amount: 5000, expense_date: T, method: 'CASH',
+      sources: [{ type: 'PERSONAL_NEW', amount: 5000, investor_name: 'haji salman' }] }), 201);
+    assert.equal(e.created[0].investor_id, ids.salman);
+  });
+});

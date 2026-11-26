@@ -52,8 +52,19 @@ async function applyFunding(c, req, { landId, useType, landPaymentId = null, exp
     let capitalId = null; let paymentId = null; let sourceType; let note = s.notes || null;
 
     if (s.type === 'PERSONAL_NEW') {
-      const investor = String(s.investor_name || '').trim();
-      if (!investor) throw badRequest(`Payment source ${n}: enter the investor name`);
+      // The investor is chosen from the investors list (investor_id). A typed name is still accepted from
+      // older forms and linked to the investor with that name when there is one.
+      let investor = String(s.investor_name || '').trim();
+      let investorId = null;
+      if (s.investor_id) {
+        const inv = (await c.query('SELECT id, name, is_active FROM investors WHERE id = $1', [Number(s.investor_id)])).rows[0];
+        if (!inv) throw badRequest(`Payment source ${n}: the selected investor was not found`);
+        if (!inv.is_active) throw badRequest(`Payment source ${n}: investor ${inv.name} is no longer active`);
+        investor = inv.name; investorId = inv.id;
+      } else if (investor) {
+        investorId = (await c.query('SELECT id FROM investors WHERE lower(name) = lower($1)', [investor])).rows[0]?.id || null;
+      }
+      if (!investor) throw badRequest(`Payment source ${n}: select the investor`);
       const date = s.investment_date || useDate;
       if (!isDate(date)) throw badRequest(`Payment source ${n}: investment date is invalid`);
       if (date > today()) throw badRequest(`Payment source ${n}: investment date cannot be in the future`);
@@ -61,10 +72,10 @@ async function applyFunding(c, req, { landId, useType, landPaymentId = null, exp
       const method = METHODS.includes(s.method) ? s.method : 'CASH';
       const no = await nextNumber(c, 'investment');
       const cap = (await c.query(
-        `INSERT INTO capital_contributions (contribution_no, investor_name, contribution_date, amount, method, reference_no, notes,
+        `INSERT INTO capital_contributions (contribution_no, investor_name, investor_id, contribution_date, amount, method, reference_no, notes,
            source_land_payment_id, source_expense_id, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-        [no, investor, date, fromPaisa(amountP), method, s.reference_no || null, note || `Invested for ${label}`, landPaymentId, expenseId, req.user.id])).rows[0];
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+        [no, investor, investorId, date, fromPaisa(amountP), method, s.reference_no || null, note || `Invested for ${label}`, landPaymentId, expenseId, req.user.id])).rows[0];
       await c.query(
         `INSERT INTO ledger_entries (entry_date, entry_type, direction, amount, method, source_type, source_id, reference, land_id, description, created_by)
          VALUES ($1,'CAPITAL_CONTRIBUTION','IN',$2,$3,'capital',$4,$5,$6,$7,$8)`,
@@ -312,16 +323,27 @@ async function createInvestment(c, req, b) {
   if (amountP <= 0) throw badRequest('Investment amount must be greater than 0');
   if (b.contribution_date > today()) throw badRequest('Investment date cannot be in the future');
   const no = await nextNumber(c, 'investment');
+  const investorId = (await c.query('SELECT id FROM investors WHERE lower(name) = lower($1)', [b.investor_name])).rows[0]?.id || null;
   const cap = (await c.query(
-    `INSERT INTO capital_contributions (contribution_no, investor_name, contribution_date, amount, method, reference_no, notes, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [no, b.investor_name, b.contribution_date, fromPaisa(amountP), b.method, b.reference_no || null, b.notes || null, req.user.id])).rows[0];
+    `INSERT INTO capital_contributions (contribution_no, investor_name, investor_id, contribution_date, amount, method, reference_no, notes, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [no, b.investor_name, investorId, b.contribution_date, fromPaisa(amountP), b.method, b.reference_no || null, b.notes || null, req.user.id])).rows[0];
   await c.query(
     `INSERT INTO ledger_entries (entry_date, entry_type, direction, amount, method, source_type, source_id, reference, description, created_by)
      VALUES ($1,'CAPITAL_CONTRIBUTION','IN',$2,$3,'capital',$4,$5,$6,$7)`,
     [cap.contribution_date, cap.amount, cap.method, cap.id, no, `Personal investment by ${cap.investor_name}`, req.user.id]);
   await audit(c, req, { action: 'CREATE', entity: 'investment', entityId: cap.id, summary: `Personal investment ${no}: ${formatPKR(cap.amount)} by ${cap.investor_name}`, after: cap });
   return cap;
+}
+
+/** Record an investor (a person who puts money into the business). No amount: that is entered when money is used. */
+async function createInvestor(c, req, b) {
+  if (b.added_date > today()) throw badRequest('Date cannot be in the future');
+  const inv = (await c.query(
+    `INSERT INTO investors (name, added_date, notes, created_by, updated_by) VALUES ($1,$2,$3,$4,$4) RETURNING *`,
+    [b.name, b.added_date, b.notes || null, req.user.id])).rows[0];
+  await audit(c, req, { action: 'CREATE', entity: 'investor', entityId: inv.id, summary: `Investor ${inv.name} added`, after: inv });
+  return inv;
 }
 
 async function reverseCapital(c, req, cap, reason) {
@@ -511,5 +533,5 @@ async function landLedger(db, landId) {
 
 module.exports = {
   computeArea, autoPriceP, landFinance, applyFunding, createLand, updateLand, payLandOwner, reverseLandPayment, createLandExpense,
-  createInvestment, reverseInvestment, landSummary, investmentSummary, landLedger, fundingText, LAND_LIST_SQL,
+  createInvestment, createInvestor, reverseInvestment, landSummary, investmentSummary, landLedger, fundingText, LAND_LIST_SQL,
 };

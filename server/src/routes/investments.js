@@ -50,6 +50,31 @@ router.get('/customer-funds', requirePerm('land.pay'), async (req, res) => {
   res.json(maskFor(req, rows.filter((r) => toPaisa(r.available) > 0)));
 });
 
+// Investors: the people who put their own money into the business. Only the person is recorded here;
+// amounts are entered when the money is used (Pay Land Owner / land expense → personal investment).
+router.get('/investors', requirePerm('investment.view', 'land.pay'), async (_req, res) => {
+  const r = await pool.query(`
+    SELECT i.id, i.name, i.added_date, i.notes, i.is_active, i.created_at, u.full_name AS entered_by_name,
+      COALESCE(t.invested, 0)::numeric(16,2) AS invested, COALESCE(t.available, 0)::numeric(16,2) AS available, COALESCE(t.n, 0)::int AS entries
+    FROM investors i LEFT JOIN users u ON u.id = i.created_by
+    LEFT JOIN (
+      SELECT c.investor_id, SUM(c.amount) AS invested, SUM(v.available) AS available, COUNT(*) AS n
+      FROM capital_contributions c JOIN v_capital_balance v ON v.id = c.id
+      WHERE c.status = 'VALID' AND c.investor_id IS NOT NULL GROUP BY c.investor_id
+    ) t ON t.investor_id = i.id
+    ORDER BY i.is_active DESC, lower(i.name)`);
+  res.json(r.rows);
+});
+
+router.post('/investors', requirePerm('investment.manage'), async (req, res) => {
+  const b = parse(z.object({
+    name: reqText('Investor name'),
+    added_date: date('Date'),
+    notes: optText,
+  }), req.body);
+  res.status(201).json(await withTx((c) => svc.createInvestor(c, req, b)));
+});
+
 router.post('/', requirePerm('investment.manage'), async (req, res) => {
   const b = parse(z.object({
     investor_name: reqText('Investor name'),

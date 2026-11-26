@@ -11,6 +11,7 @@ const UNIQUE_MESSAGES = {
   documents_stored_name_key: 'This file has already been saved',
   bookings_one_active_per_plot: 'This plot already has an active booking. It cannot be booked or sold twice.',
   expense_categories_name_uq: 'This category already exists',
+  investors_name_uq: 'An investor with this name already exists',
 };
 
 /**
@@ -29,6 +30,9 @@ function databaseProblem(err) {
   if (code === '3D000') return 'the database name in DATABASE_URL is wrong (it should end with /postgres)';
   if (/certificate|SSL|self.signed/i.test(`${code} ${msg}`)) return `SSL problem (${code || 'certificate'}): remove DATABASE_CA_CERT or paste the full Supabase certificate`;
   if (code === '42P01' && /relation "(settings|users|counters)" does not exist/.test(msg)) return 'the tables do not exist yet: run supabase/schema.sql in the Supabase SQL Editor';
+  if ((code === '42P01' && /relation "investors" does not exist/.test(msg)) || (code === '42703' && /investor_id/.test(msg))) {
+    return 'it needs the investors update: run supabase/migrations/002_investors.sql in the Supabase SQL Editor';
+  }
   if (/timeout exceeded when trying to connect|Connection terminated/i.test(msg)) return 'the database did not answer in time. Check DATABASE_URL (Transaction pooler, port 6543) and that the Supabase project is not paused';
   return null;
 }

@@ -4,33 +4,31 @@ import { Plus, PiggyBank, Landmark, Hammer, Wallet, Users, HandCoins, Scale, Und
 import { api } from '../lib/api.js';
 import { useApi, useRefreshAll } from '../lib/hooks.js';
 import { useAuth } from '../lib/auth.jsx';
-import { date, METHODS, methodLabel, pkr, shortPkr, todayStr } from '../lib/format.js';
+import { date, methodLabel, pkr, shortPkr, todayStr } from '../lib/format.js';
 import DataTable from '../components/DataTable.jsx';
 import ExportButtons from '../components/ExportButtons.jsx';
-import { Card, ConfirmDialog, ErrorBox, Input, Loading, Modal, Notice, PageHeader, Select, StatCard, StatusBadge, Textarea, useToast } from '../components/ui.jsx';
+import { Card, ConfirmDialog, ErrorBox, Input, Loading, Modal, Notice, PageHeader, StatCard, StatusBadge, Textarea, useToast } from '../components/ui.jsx';
 
-function AddInvestment({ open, onClose }) {
+/** Add an investor: only the person is recorded here. The amount is entered when the money is used (Pay Land Owner). */
+function AddInvestor({ open, onClose }) {
   const toast = useToast();
   const refresh = useRefreshAll();
   const [f, setF] = useState({});
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) { setF({ investor_name: '', contribution_date: todayStr(), amount: '', method: 'CASH', reference_no: '', notes: '' }); setErr(null); } }, [open]);
+  useEffect(() => { if (open) { setF({ name: '', added_date: todayStr(), notes: '' }); setErr(null); } }, [open]);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const save = async (e) => {
     e.preventDefault(); setBusy(true); setErr(null);
-    try { const r = await api.post('/investments', f); toast(`Investment ${r.contribution_no} of ${pkr(r.amount)} saved`); refresh(); onClose(); } catch (ex) { setErr(ex); } finally { setBusy(false); }
+    try { const r = await api.post('/investments/investors', f); toast(`Investor ${r.name} added`); refresh(); onClose(); } catch (ex) { setErr(ex); } finally { setBusy(false); }
   };
   return (
-    <Modal open={open} onClose={onClose} title="Add personal investment"
-      footer={<><button type="button" className="btn-secondary" onClick={onClose}>Cancel</button><button type="submit" form="inv-form" className="btn-primary" disabled={busy}>Save investment</button></>}>
+    <Modal open={open} onClose={onClose} title="Add investor"
+      footer={<><button type="button" className="btn-secondary" onClick={onClose}>Cancel</button><button type="submit" form="inv-form" className="btn-primary" disabled={busy}>Save investor</button></>}>
       <form id="inv-form" onSubmit={save} className="grid gap-3 sm:grid-cols-2">
-        <Notice className="sm:col-span-2">Use this when the owner puts his own money into the business before deciding what it is for. It can then be used for land payments. (Money put in while paying a land owner can also be entered directly in Pay Land Owner.)</Notice>
-        <Input label="Investor name" required value={f.investor_name} onChange={set('investor_name')} />
-        <Input label="Investment date" type="date" required max={todayStr()} value={f.contribution_date} onChange={set('contribution_date')} />
-        <Input label="Amount (Rs)" required inputMode="decimal" value={f.amount} onChange={set('amount')} />
-        <Select label="How the money came in" value={f.method} onChange={set('method')} options={METHODS} />
-        <Input label="Reference (optional)" value={f.reference_no} onChange={set('reference_no')} />
+        <Notice className="sm:col-span-2">Add the person here without any amount. When you pay a land owner, choose this investor as the payment source and enter the amount there.</Notice>
+        <Input label="Investor name" required value={f.name} onChange={set('name')} />
+        <Input label="Date" type="date" required max={todayStr()} value={f.added_date} onChange={set('added_date')} />
         <Textarea label="Notes" className="sm:col-span-2" rows={2} value={f.notes} onChange={set('notes')} />
         <ErrorBox error={err} className="sm:col-span-2" />
       </form>
@@ -44,6 +42,7 @@ export default function InvestmentsPage() {
   const refresh = useRefreshAll();
   const { data: s } = useApi('/investments/summary');
   const { data, isLoading, error } = useApi('/investments');
+  const { data: investors } = useApi('/investments/investors');
   const [add, setAdd] = useState(false);
   const [rev, setRev] = useState(null);
   const cols = [
@@ -66,7 +65,7 @@ export default function InvestmentsPage() {
       <PageHeader title="Personal Investment" subtitle="Owner's own money put into the business, and how customer money was used for land" back={{ to: '/lands', label: 'Land Management' }}
         actions={<>
           <ExportButtons report="investment" />
-          {can('investment.manage') && <button type="button" className="btn-primary" onClick={() => setAdd(true)}><Plus className="h-4 w-4" />Add investment</button>}
+          {can('investment.manage') && <button type="button" className="btn-primary" onClick={() => setAdd(true)}><Plus className="h-4 w-4" />Add investor</button>}
         </>} />
       {s && <>
         <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gold-600">Personal investment</h2>
@@ -95,12 +94,22 @@ export default function InvestmentsPage() {
           </Notice>
         )}
       </>}
+      <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gold-600">Investors</h2>
+      <div className="mb-5">
+        <DataTable rows={investors || []} searchable={false} empty="No investor added yet. Click “Add investor”." columns={[
+          { key: 'name', header: 'Investor', render: (r) => <div><div className="font-semibold text-navy-900">{r.name}</div>{r.notes && <div className="text-xs text-slate-500">{r.notes}</div>}</div> },
+          { key: 'added_date', header: 'Date', render: (r) => date(r.added_date) },
+          { key: 'invested', header: 'Invested so far', align: 'right', render: (r) => pkr(r.invested) },
+          { key: 'available', header: 'Not used yet', align: 'right', render: (r) => <span className={Number(r.available) > 0 ? 'font-semibold text-emerald-700' : 'text-slate-500'}>{pkr(r.available)}</span> },
+          { key: 'entered_by_name', header: 'Added by', render: (r) => <span className="text-xs">{r.entered_by_name || '—'}</span> },
+        ]} />
+      </div>
       <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gold-600">Every investment entry</h2>
       <ErrorBox error={error} />
       {isLoading ? <Loading /> : <DataTable columns={cols} rows={data} empty="No personal investment recorded yet." searchPlaceholder="Search investor, ID, land…"
         rowClass={(r) => (r.status === 'REVERSED' ? 'text-slate-400' : '')} />}
       <p className="mt-3 text-xs text-slate-500">Customer money is never counted as personal investment. Land payments are listed on each <Link to="/lands" className="text-navy-700 underline">land's ledger</Link>.</p>
-      <AddInvestment open={add} onClose={() => setAdd(false)} />
+      <AddInvestor open={add} onClose={() => setAdd(false)} />
       <ConfirmDialog open={!!rev} onClose={() => setRev(null)} danger requireReason title={`Reverse investment ${rev?.contribution_no || ''}`} confirmText="Reverse"
         message="The entry stays on record marked as reversed, and a cash-out entry is added to the cash book."
         onConfirm={async (reason) => { await api.post(`/investments/${rev.id}/reverse`, { reason }); toast('Investment reversed'); refresh(); }} />

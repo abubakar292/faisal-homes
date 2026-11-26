@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Plus, Trash2, Wallet, Users, PiggyBank, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useApi } from '../lib/hooks.js';
 import { date, METHODS, pkr, toPaisa } from '../lib/format.js';
@@ -15,14 +16,14 @@ export const SOURCE_TYPES = [
 ];
 const ICON = { PERSONAL_NEW: PiggyBank, PERSONAL_EXISTING: Wallet, CUSTOMER: Users };
 let seq = 0;
-export const newSource = (over = {}) => ({ key: ++seq, type: 'PERSONAL_NEW', amount: '', investor_name: '', investment_date: '', method: '', reference_no: '', notes: '', capital_id: '', payment_id: '', filter: '', ...over });
+export const newSource = (over = {}) => ({ key: ++seq, type: 'PERSONAL_NEW', amount: '', investor_id: '', investment_date: '', method: '', reference_no: '', notes: '', capital_id: '', payment_id: '', filter: '', ...over });
 
 /** Convert the rows to what the server expects. */
 export function sourcesPayload(rows, { useDate, method } = {}) {
   return rows.map((r) => {
     const base = { type: r.type, amount: r.amount, notes: r.notes || undefined };
     if (r.type === 'PERSONAL_NEW') {
-      return { ...base, investor_name: r.investor_name, investment_date: r.investment_date || useDate, method: r.method || method || 'CASH', reference_no: r.reference_no || undefined };
+      return { ...base, investor_id: r.investor_id ? Number(r.investor_id) : undefined, investment_date: r.investment_date || useDate, method: r.method || method || 'CASH', reference_no: r.reference_no || undefined };
     }
     if (r.type === 'PERSONAL_EXISTING') return { ...base, capital_id: r.capital_id ? Number(r.capital_id) : undefined };
     return { ...base, payment_id: r.payment_id ? Number(r.payment_id) : undefined, customer_id: r.customer_id || undefined, booking_id: r.booking_id || undefined };
@@ -38,6 +39,8 @@ export function sourcesCheck(rows, total) {
 export default function FundingSources({ rows, onChange, total, useDate }) {
   const { data: capital } = useApi('/investments');
   const { data: receipts } = useApi('/investments/customer-funds');
+  const { data: investors } = useApi('/investments/investors');
+  const investorOptions = (investors || []).filter((x) => x.is_active).map((x) => [x.id, x.name]);
   const set = (key, patch) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const { sumP, diffP, totalP } = sourcesCheck(rows, total);
 
@@ -68,9 +71,11 @@ export default function FundingSources({ rows, onChange, total, useDate }) {
                 {rows.length > 1 && <button type="button" className="btn-ghost btn-sm ml-auto text-red-700" onClick={() => onChange(rows.filter((x) => x.key !== r.key))}><Trash2 className="h-4 w-4" />Remove</button>}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Select label="Source of money" className="sm:col-span-2" value={r.type} onChange={(e) => set(r.key, { type: e.target.value, capital_id: '', payment_id: '' })} options={SOURCE_TYPES} />
+                <Select label="Source of money" className="sm:col-span-2" value={r.type} onChange={(e) => set(r.key, { type: e.target.value, capital_id: '', payment_id: '', investor_id: '' })} options={SOURCE_TYPES} />
                 {r.type === 'PERSONAL_NEW' && <>
-                  <Input label="Investor name" required value={r.investor_name} onChange={(e) => set(r.key, { investor_name: e.target.value })} placeholder="Who put in the money" />
+                  <Select label="Investor" required value={r.investor_id} onChange={(e) => set(r.key, { investor_id: e.target.value })}
+                    placeholder={investorOptions.length ? 'Select the investor…' : 'No investor yet: add one on the Personal Investment page'} options={investorOptions}
+                    hint={<Link to="/investments" className="font-semibold text-navy-700 hover:underline">Add or see investors</Link>} />
                   <Input label="Investment date" type="date" value={r.investment_date || useDate || ''} max={useDate} onChange={(e) => set(r.key, { investment_date: e.target.value })} />
                   <Select label="How the money came in" value={r.method} onChange={(e) => set(r.key, { method: e.target.value })} placeholder="Same as payment" options={METHODS} />
                   <Input label="Reference (optional)" value={r.reference_no} onChange={(e) => set(r.key, { reference_no: e.target.value })} />
