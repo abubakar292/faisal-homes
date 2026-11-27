@@ -4,7 +4,7 @@ import { Plus, Layers, Pencil, Lock, Unlock, Ban, RotateCcw, Trash2, FileSignatu
 import { api, qs } from '../lib/api.js';
 import { useApi, useRefreshAll } from '../lib/hooks.js';
 import { useAuth } from '../lib/auth.jsx';
-import { date, num, pkr, STATUS, todayStr } from '../lib/format.js';
+import { date, num, pkr, STATUS, todayStr, toPaisa } from '../lib/format.js';
 import DataTable from '../components/DataTable.jsx';
 import DocumentsPanel from '../components/DocumentsPanel.jsx';
 import ExportButtons from '../components/ExportButtons.jsx';
@@ -12,8 +12,10 @@ import { CustomerPicker } from '../components/Pickers.jsx';
 import { Card, Checkbox, ConfirmDialog, ErrorBox, Input, KV, Loading, Modal, PageHeader, Select, StatusBadge, Textarea, useToast, Empty } from '../components/ui.jsx';
 
 const SIZES = [3, 5, 7, 10, 15, 20];
-const blank = (sid, bid) => ({ society_id: sid || '', block_id: bid || '', plot_no: '', street_no: '', size_marla: '5', front_ft: '', depth_ft: '', category: 'RESIDENTIAL',
-  is_corner: false, is_main_road: false, is_park_facing: false, location_note: '', price_per_marla: '', discount: '0', notes: '' });
+const blank = (sid, bid) => ({ society_id: sid || '', block_id: bid || '', plot_no: '', size_marla: '5', category: 'RESIDENTIAL',
+  is_corner: false, is_main_road: false, is_park_facing: false, location_note: '', price_per_marla: '', discount_per_marla: '0', notes: '' });
+/** The offer discount is stored as a total; the form works with the amount per Marla. */
+const discountPerMarla = (p) => (Number(p.size_marla) > 0 ? String(Math.round((Number(p.discount) || 0) / Number(p.size_marla) * 100) / 100) : '0');
 
 function useSocieties() { return useApi('/societies'); }
 function useBlocks(societyId) { return useApi(societyId ? `/societies/${societyId}` : null); }
@@ -41,10 +43,12 @@ export function PlotForm({ open, onClose, plot, defaults }) {
   useEffect(() => {
     if (!open) return;
     setErr(null);
-    setF(plot ? { ...blank(), ...Object.fromEntries(Object.entries(plot).map(([k, v]) => [k, v === null ? '' : typeof v === 'boolean' ? v : String(v)])) } : blank(defaults?.society_id, defaults?.block_id));
+    setF(plot ? { ...blank(), ...Object.fromEntries(Object.entries(plot).map(([k, v]) => [k, v === null ? '' : typeof v === 'boolean' ? v : String(v)])), discount_per_marla: discountPerMarla(plot) }
+      : blank(defaults?.society_id, defaults?.block_id));
   }, [open, plot, defaults]);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e?.target ? e.target.value : e }));
   const list = Math.round((Number(f.size_marla) || 0) * (Number(f.price_per_marla) || 0));
+  const discountTotal = (Math.round((Number(f.size_marla) || 0) * toPaisa(f.discount_per_marla)) || 0) / 100;
   const save = async (e) => {
     e.preventDefault(); setErr(null);
     try { if (plot) await api.put(`/plots/${plot.id}`, f); else await api.post('/plots', f); toast(plot ? 'Plot updated' : `Plot ${f.plot_no} added`); refresh(); onClose(); } catch (ex) { setErr(ex); }
@@ -53,16 +57,13 @@ export function PlotForm({ open, onClose, plot, defaults }) {
     <Modal open={open} onClose={onClose} title={plot ? `Edit plot ${plot.plot_no}` : 'Add plot'} size="lg"
       footer={<><button type="button" className="btn-secondary" onClick={onClose}>Cancel</button><button form="plot-form" className="btn-primary">Save plot</button></>}>
       <form id="plot-form" onSubmit={save} className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Select label="Society" required value={f.society_id} onChange={(e) => setF({ ...f, society_id: e.target.value, block_id: '' })} placeholder="Select…" options={(socs || []).map((s) => [s.id, s.name])} />
           <Select label="Block" required value={f.block_id} onChange={set('block_id')} placeholder="Select…" options={(soc?.blocks || []).map((b) => [b.id, `Block ${b.name}`])} />
           <Input label="Plot number" required value={f.plot_no} onChange={set('plot_no')} placeholder="e.g. A-25" />
-          <Input label="Street" value={f.street_no} onChange={set('street_no')} />
         </div>
         <SizeInput value={f.size_marla} onChange={set('size_marla')} />
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Input label="Front (ft)" inputMode="decimal" value={f.front_ft} onChange={set('front_ft')} />
-          <Input label="Depth (ft)" inputMode="decimal" value={f.depth_ft} onChange={set('depth_ft')} />
+        <div className="grid gap-3 sm:grid-cols-2">
           <Select label="Category" value={f.category} onChange={set('category')} options={[['RESIDENTIAL', 'Residential'], ['COMMERCIAL', 'Commercial']]} />
           <Input label="Location note" value={f.location_note} onChange={set('location_note')} />
         </div>
@@ -73,8 +74,9 @@ export function PlotForm({ open, onClose, plot, defaults }) {
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <Input label="Price per Marla (Rs)" inputMode="decimal" value={f.price_per_marla} onChange={set('price_per_marla')} />
-          <Input label="Offer discount (Rs)" inputMode="decimal" value={f.discount} onChange={set('discount')} />
-          <div className="rounded-lg bg-navy-50 p-3 text-sm"><div className="text-xs text-slate-500">Total plot price</div><div className="font-bold text-navy-900">{pkr(list)}</div><div className="text-xs text-slate-500">Net {pkr(list - (Number(f.discount) || 0))}</div></div>
+          <Input label="Offer discount per Marla (Rs)" inputMode="decimal" value={f.discount_per_marla} onChange={set('discount_per_marla')}
+            hint={discountTotal > 0 ? `Total discount ${pkr(discountTotal)} (${num(f.size_marla)} Marla × ${pkr(Number(f.discount_per_marla) || 0)})` : undefined} />
+          <div className="rounded-lg bg-navy-50 p-3 text-sm"><div className="text-xs text-slate-500">Total plot price</div><div className="font-bold text-navy-900">{pkr(list)}</div><div className="text-xs text-slate-500">Net {pkr(list - discountTotal)}</div></div>
         </div>
         <Textarea label="Notes" value={f.notes} onChange={set('notes')} rows={2} />
         <ErrorBox error={err} />
@@ -221,7 +223,7 @@ export function PlotDetailPage() {
         <Card title="Plot details" className="lg:col-span-2">
           <KV cols={3} items={[
             ['Size', `${num(p.size_marla)} Marla`], ['Dimensions', p.front_ft && p.depth_ft ? `${num(p.front_ft)} × ${num(p.depth_ft)} ft` : '—'], ['Type', feats],
-            ['Rate per Marla', pkr(p.price_per_marla)], ['Total price', pkr(p.list_price)], ['Offer discount', pkr(p.discount)],
+            ['Rate per Marla', pkr(p.price_per_marla)], ['Total price', pkr(p.list_price)], ['Offer discount', Number(p.discount) > 0 ? `${pkr(discountPerMarla(p))} per Marla (total ${pkr(p.discount)})` : pkr(0)],
             ['Net price', <b key="n">{pkr(p.list_price - p.discount)}</b>], ['Location', p.location_note], ['Notes', p.notes],
             p.status === 'RESERVED' && ['Reserved for', `${p.reserved_for}${p.reserved_until ? ` until ${date(p.reserved_until)}` : ''}${p.reserved_until && p.reserved_until < todayStr() ? ' (expired)' : ''}`],
             p.status_note && ['Status note', p.status_note],

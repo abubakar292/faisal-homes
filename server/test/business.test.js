@@ -157,6 +157,14 @@ describe('society, blocks and plots', () => {
     assert.equal((await admin.post('/plots/bulk', { society_id: s.id, block_id: ids.blockA, prefix: 'A-', start_no: 15, count: 10, size_marla: 5 })).status, 409);
     const p = ok(await admin.post('/plots', { society_id: s.id, block_id: ids.blockB, plot_no: 'B-1', size_marla: 7.5, price_per_marla: 900000, is_corner: true, category: 'COMMERCIAL' }), 201);
     assert.equal(Number(p.list_price), 6750000);
+    // Offer discount is entered per Marla; the total is size × per-Marla amount.
+    const b1 = { society_id: s.id, block_id: ids.blockB, plot_no: 'B-1', size_marla: 7.5, price_per_marla: 900000, is_corner: true, category: 'COMMERCIAL' };
+    assert.equal(Number(ok(await admin.put(`/plots/${p.id}`, { ...b1, discount_per_marla: 20000 })).discount), 150000);
+    assert.equal(Number(ok(await admin.put(`/plots/${p.id}`, { ...b1, discount_per_marla: '1,000.50' })).discount), 7503.75);
+    const over = await admin.put(`/plots/${p.id}`, { ...b1, discount_per_marla: 900001 });
+    assert.equal(over.status, 400);
+    assert.match(over.data.error, /per Marla cannot be more than the price per Marla/);
+    assert.equal(Number(ok(await admin.put(`/plots/${p.id}`, { ...b1, discount_per_marla: '' })).discount), 0);
     assert.equal((await admin.post('/plots', { society_id: s.id, block_id: ids.blockB, plot_no: 'b-1', size_marla: 5 })).status, 409);
     assert.equal((await sales.post('/plots', { society_id: s.id, block_id: ids.blockB, plot_no: 'B-9', size_marla: 5 })).status, 403);
     const list = ok(await admin.get(`/plots?society_id=${s.id}&status=AVAILABLE&size=5`));

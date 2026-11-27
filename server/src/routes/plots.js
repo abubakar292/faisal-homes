@@ -5,7 +5,7 @@ const { requirePerm } = require('../middleware/auth');
 const { audit } = require('../lib/audit');
 const { maskFor } = require('../lib/mask');
 const { notFound, badRequest, conflict } = require('../lib/errors');
-const { z, parse, reqText, optText, optMoney, optNumber, positiveNumber, intId, optId, optDate, bool } = require('../lib/validate');
+const { z, parse, reqText, optText, money, optMoney, optNumber, positiveNumber, intId, optId, optDate, bool } = require('../lib/validate');
 
 const router = express.Router();
 require('../lib/validate').numericParams(router, 'id');
@@ -89,6 +89,8 @@ const plotSchema = z.object({
   location_note: optText,
   price_per_marla: optMoney('Price per Marla'),
   discount: optMoney('Discount'),
+  // The Add/Edit plot form sends the offer discount per Marla; the total is worked out from the plot size.
+  discount_per_marla: z.union([money('Offer discount per Marla'), z.null(), z.literal('')]).optional(),
   notes: optText,
 });
 
@@ -97,6 +99,11 @@ async function checkBlock(c, societyId, blockId) {
   if (!r.rowCount) throw badRequest('The selected block does not belong to this society');
 }
 function checkDiscount(b) {
+  if (b.discount_per_marla !== undefined) {
+    const perMarla = Number(b.discount_per_marla) || 0;
+    if (perMarla > b.price_per_marla) throw badRequest('Offer discount per Marla cannot be more than the price per Marla');
+    b.discount = Math.round(b.size_marla * Math.round(perMarla * 100)) / 100;
+  }
   const list = Math.round(b.size_marla * b.price_per_marla * 100);
   if (Math.round(b.discount * 100) > list) throw badRequest('Discount cannot be more than the plot price');
   if (b.size_marla > 100000) throw badRequest('Plot size is too large');
