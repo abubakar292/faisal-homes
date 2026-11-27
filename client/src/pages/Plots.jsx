@@ -92,7 +92,7 @@ function BulkForm({ open, onClose, defaults }) {
   const [busy, setBusy] = useState(false);
   const { data: socs } = useSocieties();
   const { data: soc } = useBlocks(f.society_id);
-  useEffect(() => { if (open) { setF({ society_id: defaults?.society_id || '', block_id: defaults?.block_id || '', prefix: '', suffix: '', start_no: '1', count: '10', street_no: '', size_marla: '5', front_ft: '', depth_ft: '', category: 'RESIDENTIAL', price_per_marla: '', is_corner: false, is_main_road: false, is_park_facing: false }); setErr(null); } }, [open, defaults]);
+  useEffect(() => { if (open) { setF({ society_id: defaults?.society_id || '', block_id: defaults?.block_id || '', prefix: '', suffix: '', start_no: '1', count: '10', size_marla: '5', category: 'RESIDENTIAL', price_per_marla: '', is_corner: false, is_main_road: false, is_park_facing: false }); setErr(null); } }, [open, defaults]);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e?.target ? e.target.value : e }));
   const n = Number(f.count) || 0; const st = Number(f.start_no) || 0;
   const save = async (e) => {
@@ -107,18 +107,15 @@ function BulkForm({ open, onClose, defaults }) {
           <Select label="Society" required value={f.society_id} onChange={(e) => setF({ ...f, society_id: e.target.value, block_id: '' })} placeholder="Select…" options={(socs || []).map((s) => [s.id, s.name])} />
           <Select label="Block" required value={f.block_id} onChange={set('block_id')} placeholder="Select…" options={(soc?.blocks || []).map((b) => [b.id, `Block ${b.name}`])} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-4">
           <Input label="Prefix" value={f.prefix} onChange={set('prefix')} placeholder="A-" />
           <Input label="Start number" required inputMode="numeric" value={f.start_no} onChange={set('start_no')} />
           <Input label="How many" required inputMode="numeric" value={f.count} onChange={set('count')} />
           <Input label="Suffix" value={f.suffix} onChange={set('suffix')} />
-          <Input label="Street" value={f.street_no} onChange={set('street_no')} />
         </div>
         {n > 0 && <div className="rounded-md bg-navy-50 px-3 py-2 text-sm text-navy-900">Will create: <b>{f.prefix}{st}{f.suffix}</b>{n > 1 && <> , {f.prefix}{st + 1}{f.suffix} … <b>{f.prefix}{st + n - 1}{f.suffix}</b></>} ({n} plots)</div>}
         <SizeInput value={f.size_marla} onChange={set('size_marla')} />
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Input label="Front (ft)" inputMode="decimal" value={f.front_ft} onChange={set('front_ft')} />
-          <Input label="Depth (ft)" inputMode="decimal" value={f.depth_ft} onChange={set('depth_ft')} />
+        <div className="grid gap-3 sm:grid-cols-2">
           <Select label="Category" value={f.category} onChange={set('category')} options={[['RESIDENTIAL', 'Residential'], ['COMMERCIAL', 'Commercial']]} />
           <Input label="Price per Marla (Rs)" inputMode="decimal" value={f.price_per_marla} onChange={set('price_per_marla')} />
         </div>
@@ -147,7 +144,6 @@ export function PlotsPage() {
   const cols = [
     { key: 'plot_no', header: 'Plot', render: (r) => <div className="font-semibold text-navy-900">{r.plot_no}<div className="text-xs font-normal text-slate-500">{r.society_name}</div></div> },
     { key: 'block_name', header: 'Block' },
-    { key: 'street_no', header: 'Street', render: (r) => r.street_no || '—' },
     { key: 'size_marla', header: 'Size', align: 'right', render: (r) => `${num(r.size_marla)} M` },
     { key: 'features', header: 'Type', value: (r) => [r.category, r.is_corner && 'corner', r.is_main_road && 'main road', r.is_park_facing && 'park'].filter(Boolean).join(' '), sortable: false,
       render: (r) => <div className="flex flex-wrap gap-1 text-[11px]">{r.category === 'COMMERCIAL' && <span className="rounded bg-gold-50 px-1.5 py-0.5 font-semibold text-gold-600">Commercial</span>}{r.is_corner && <span className="rounded bg-slate-100 px-1.5 py-0.5">Corner</span>}{r.is_main_road && <span className="rounded bg-slate-100 px-1.5 py-0.5">Main road</span>}{r.is_park_facing && <span className="rounded bg-slate-100 px-1.5 py-0.5">Park</span>}</div> },
@@ -180,7 +176,7 @@ export function PlotsPage() {
         </div>
       </Card>
       <ErrorBox error={error} />
-      {isLoading ? <Loading /> : <DataTable columns={cols} rows={data} onRowClick={(r) => nav(`/plots/${r.id}`)} pageSize={50} searchPlaceholder="Search plot number, owner, street…" empty="No plots match these filters." />}
+      {isLoading ? <Loading /> : <DataTable columns={cols} rows={data} onRowClick={(r) => nav(`/plots/${r.id}`)} pageSize={50} searchPlaceholder="Search plot number or owner…" empty="No plots match these filters." />}
       <PlotForm open={form} onClose={() => setForm(false)} defaults={filters} />
       <BulkForm open={bulk} onClose={() => setBulk(false)} defaults={filters} />
     </>
@@ -209,7 +205,7 @@ export function PlotDetailPage() {
   const canBook = ['AVAILABLE', 'RESERVED'].includes(p.status);
   return (
     <>
-      <PageHeader title={<span className="flex items-center gap-3">Plot {p.plot_no} <StatusBadge status={p.status} /></span>} subtitle={`${p.society_name} · Block ${p.block_name}${p.street_no ? ` · Street ${p.street_no}` : ''}`} back={{ to: '/plots', label: 'Plot inventory' }}
+      <PageHeader title={<span className="flex items-center gap-3">Plot {p.plot_no} <StatusBadge status={p.status} /></span>} subtitle={`${p.society_name} · Block ${p.block_name}`} back={{ to: '/plots', label: 'Plot inventory' }}
         actions={<>
           {canBook && can('booking.create') && <Link to={`/bookings/new?plot_id=${p.id}`} className="btn-gold"><FileSignature className="h-4 w-4" />Book this plot</Link>}
           {p.status === 'AVAILABLE' && can('plot.reserve') && <button type="button" className="btn-secondary" onClick={() => { setRv({ reserved_for: '', customer: null, reserved_until: '', note: '' }); setRErr(null); setReserve(true); }}><Lock className="h-4 w-4" />Reserve</button>}
@@ -222,7 +218,7 @@ export function PlotDetailPage() {
       <div className="grid gap-5 lg:grid-cols-3">
         <Card title="Plot details" className="lg:col-span-2">
           <KV cols={3} items={[
-            ['Size', `${num(p.size_marla)} Marla`], ['Dimensions', p.front_ft && p.depth_ft ? `${num(p.front_ft)} × ${num(p.depth_ft)} ft` : '—'], ['Type', feats],
+            ['Size', `${num(p.size_marla)} Marla`], ['Type', feats],
             ['Rate per Marla', pkr(p.price_per_marla)], ['Total price', pkr(p.list_price)], ['Offer discount', Number(p.discount) > 0 ? `${pkr(discountPerMarla(p))} per Marla (total ${pkr(p.discount)})` : pkr(0)],
             ['Net price', <b key="n">{pkr(p.list_price - p.discount)}</b>], ['Location', p.location_note], ['Notes', p.notes],
             p.status === 'RESERVED' && ['Reserved for', `${p.reserved_for}${p.reserved_until ? ` until ${date(p.reserved_until)}` : ''}${p.reserved_until && p.reserved_until < todayStr() ? ' (expired)' : ''}`],
