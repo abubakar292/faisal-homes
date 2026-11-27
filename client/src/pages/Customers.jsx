@@ -98,7 +98,7 @@ export function CustomerProfilePage() {
           </div>
           <KV cols={1} items={[['Address', [c.address, c.city].filter(Boolean).join(', ')], ['Email', c.email], ['Registered', date(c.registration_date)],
             ['Nominee', [c.nominee_name, c.nominee_relation && `(${c.nominee_relation})`, c.nominee_cnic, c.nominee_mobile].filter(Boolean).join(' ')],
-            ['Guarantor', [c.guarantor_name, c.guarantor_cnic, c.guarantor_mobile, c.guarantor_address].filter(Boolean).join(' · ')], ['Notes', c.notes]]} />
+            ['Notes', c.notes]]} />
         </Card>
         <div className="lg:col-span-2">
           <Tabs active={tab} onChange={setTab} tabs={[['plots', 'Plots', bookings.length], ['schedule', 'Installments', installments.length], ['payments', 'Payments & receipts', payments.length], ['transfers', 'Transfers', transfers.length], ['docs', 'Documents']]} />

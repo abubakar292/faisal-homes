@@ -201,6 +201,15 @@ describe('customers', () => {
     ids.c3 = ok(await sales.post('/customers', { full_name: 'Zainab Bibi', cnic: '17301-5555555-2', mobile: '03455556666' }), 201).id;
     ids.c4 = ok(await sales.post('/customers', { full_name: 'Usman Tariq', cnic: '42101-9999999-9', mobile: '03219998888' }), 201).id;
   });
+  it('no longer takes guarantor details, and editing keeps any saved earlier', async () => {
+    const g = ok(await sales.post('/customers', { full_name: 'Guarantor Test', cnic: '35202-1111111-1', guarantor_name: 'Ignored', guarantor_cnic: '123' }), 201);
+    assert.equal(g.guarantor_name, null);
+    assert.equal(g.guarantor_cnic, null);
+    await require('../src/db/pool').pool.query("UPDATE customers SET guarantor_name = 'Old Guarantor' WHERE id = $1", [g.id]);
+    const edited = ok(await sales.put(`/customers/${g.id}`, { full_name: 'Guarantor Test 2', cnic: '35202-1111111-1' }));
+    assert.equal(edited.full_name, 'Guarantor Test 2');
+    assert.equal(edited.guarantor_name, 'Old Guarantor');
+  });
   it('searches by CNIC digits, mobile, name and code; masks CNIC for viewers', async () => {
     assert.equal(ok(await sales.get('/customers?q=3520212345671')).length, 1);
     assert.equal(ok(await sales.get('/customers?q=1234567')).length, 1);

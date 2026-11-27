@@ -5,7 +5,7 @@ import { ErrorBox, Input, Textarea, useToast } from './ui.jsx';
 import { todayStr } from '../lib/format.js';
 
 const FIELDS = ['full_name', 'father_name', 'cnic', 'mobile', 'whatsapp', 'email', 'address', 'city', 'nominee_name', 'nominee_relation', 'nominee_cnic', 'nominee_mobile',
-  'guarantor_name', 'guarantor_cnic', 'guarantor_mobile', 'guarantor_address', 'notes', 'registration_date'];
+  'notes', 'registration_date'];
 
 /** Format CNIC while typing: 35202-1234567-1 */
 function cnicMask(v) {
@@ -57,15 +57,6 @@ export default function CustomerForm({ customer, initialName = '', onSaved, form
           <Input label="Relation" value={f.nominee_relation} onChange={set('nominee_relation')} placeholder="Son, wife…" />
           <Input label="CNIC" value={f.nominee_cnic} onChange={set('nominee_cnic')} inputMode="numeric" error={err4('nominee_cnic')} />
           <Input label="Mobile" value={f.nominee_mobile} onChange={set('nominee_mobile')} inputMode="tel" />
-        </div>
-      </fieldset>
-      <fieldset className="rounded-lg border border-slate-200 p-3">
-        <legend className="px-1 text-sm font-semibold text-navy-900">Guarantor</legend>
-        <div className={`grid gap-3 ${compact ? 'sm:grid-cols-2' : 'sm:grid-cols-4'}`}>
-          <Input label="Name" value={f.guarantor_name} onChange={set('guarantor_name')} />
-          <Input label="CNIC" value={f.guarantor_cnic} onChange={set('guarantor_cnic')} inputMode="numeric" error={err4('guarantor_cnic')} />
-          <Input label="Mobile" value={f.guarantor_mobile} onChange={set('guarantor_mobile')} inputMode="tel" />
-          <Input label="Address" value={f.guarantor_address} onChange={set('guarantor_address')} />
         </div>
       </fieldset>
       <Textarea label="Notes" value={f.notes} onChange={set('notes')} rows={2} />

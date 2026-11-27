@@ -86,12 +86,11 @@ const schema = z.object({
   email: z.union([z.string().trim().email('Email is not valid'), z.literal(''), z.null(), z.undefined()]).transform((v) => v || null),
   address: optText, city: optText,
   nominee_name: optText, nominee_relation: optText, nominee_cnic: optCnic('Nominee CNIC'), nominee_mobile: phone('Nominee mobile'),
-  guarantor_name: optText, guarantor_cnic: optCnic('Guarantor CNIC'), guarantor_mobile: phone('Guarantor mobile'), guarantor_address: optText,
   notes: optText,
   registration_date: optDate('Registration date'),
 });
 const FIELDS = ['full_name', 'father_name', 'cnic', 'mobile', 'whatsapp', 'email', 'address', 'city', 'nominee_name', 'nominee_relation', 'nominee_cnic',
-  'nominee_mobile', 'guarantor_name', 'guarantor_cnic', 'guarantor_mobile', 'guarantor_address', 'notes', 'registration_date'];
+  'nominee_mobile', 'notes', 'registration_date']; // guarantor columns are no longer asked for; saved values are left as they are
 
 router.post('/', requirePerm('customer.edit'), async (req, res) => {
   const b = parse(schema, req.body);
